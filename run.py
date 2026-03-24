@@ -25,7 +25,7 @@ def main() -> None:
     handle = os.getenv("CHANNEL_HANDLE", "Chase-H-AI")
 
     if args.dry_run:
-        fixture_path = Path("tests/fixtures/sample_channel.json")
+        fixture_path = Path(__file__).parent / "tests" / "fixtures" / "sample_channel.json"
         videos = json.loads(fixture_path.read_text())["videos"]
         print(f"[dry-run] Loaded {len(videos)} videos from fixture.")
     else:
@@ -37,6 +37,7 @@ def main() -> None:
         videos = fetch_channel_videos(api_key, handle)
         print(f"Fetched {len(videos)} videos.")
 
+    # Empty string triggers rake-nltk fallback inside analyze_videos()
     anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
     print("Analyzing topics and keywords...")
     analysis = analyze_videos(videos, anthropic_key)
