@@ -1,0 +1,38 @@
+name: Weekly YouTube Analysis
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # Every Monday at 9:00 AM UTC
+  workflow_dispatch:        # Allow manual trigger from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run analyzer
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CHANNEL_HANDLE: Chase-H-AI
+        run: python run.py
+
+      - name: Commit report
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: weekly report ${{ github.run_id }}"
+          file_pattern: reports/*.html
