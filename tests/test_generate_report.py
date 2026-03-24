@@ -1,7 +1,7 @@
-import json
 import os
 import tempfile
 from pathlib import Path
+import pytest
 from src.generate_report import generate_report
 
 SAMPLE_VIDEOS = [
@@ -24,58 +24,43 @@ SAMPLE_ANALYSIS = {
 }
 
 
-def test_generate_report_creates_file():
-    with tempfile.TemporaryDirectory() as tmp:
-        output_path = os.path.join(tmp, "report.html")
-        generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
-        assert Path(output_path).exists()
+@pytest.fixture
+def report_content(tmp_path):
+    output_path = tmp_path / "report.html"
+    generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
+    return output_path.read_text()
 
 
-def test_generate_report_html_contains_chart_js():
-    with tempfile.TemporaryDirectory() as tmp:
-        output_path = os.path.join(tmp, "report.html")
-        generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
-        content = Path(output_path).read_text()
-        assert "chart.js" in content.lower()
+def test_generate_report_creates_file(tmp_path):
+    output_path = tmp_path / "report.html"
+    generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
+    assert output_path.exists()
 
 
-def test_generate_report_html_contains_top_topic():
-    with tempfile.TemporaryDirectory() as tmp:
-        output_path = os.path.join(tmp, "report.html")
-        generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
-        content = Path(output_path).read_text()
-        assert "AI Agents" in content
+def test_generate_report_html_contains_chart_js(report_content):
+    assert "chart.js" in report_content.lower()
 
 
-def test_generate_report_html_contains_video_title():
-    with tempfile.TemporaryDirectory() as tmp:
-        output_path = os.path.join(tmp, "report.html")
-        generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
-        content = Path(output_path).read_text()
-        assert "Build AI Agents" in content
+def test_generate_report_html_contains_top_topic(report_content):
+    assert "AI Agents" in report_content
 
 
-def test_generate_report_html_contains_digest():
-    with tempfile.TemporaryDirectory() as tmp:
-        output_path = os.path.join(tmp, "report.html")
-        generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
-        content = Path(output_path).read_text()
-        assert "Test digest text." in content
+def test_generate_report_html_contains_video_title(report_content):
+    assert "Build AI Agents" in report_content
 
 
-def test_generate_report_shows_ai_warning_when_unavailable():
+def test_generate_report_html_contains_digest(report_content):
+    assert "Test digest text." in report_content
+
+
+def test_generate_report_shows_ai_warning_when_unavailable(tmp_path):
     analysis = {**SAMPLE_ANALYSIS, "ai_available": False, "digest": "AI unavailable fallback."}
-    with tempfile.TemporaryDirectory() as tmp:
-        output_path = os.path.join(tmp, "report.html")
-        generate_report(SAMPLE_VIDEOS, analysis, output_path)
-        content = Path(output_path).read_text()
-        assert "AI analysis unavailable" in content
+    output_path = tmp_path / "report.html"
+    generate_report(SAMPLE_VIDEOS, analysis, output_path)
+    content = output_path.read_text()
+    assert "AI analysis unavailable" in content
 
 
-def test_generate_report_html_is_valid_structure():
-    with tempfile.TemporaryDirectory() as tmp:
-        output_path = os.path.join(tmp, "report.html")
-        generate_report(SAMPLE_VIDEOS, SAMPLE_ANALYSIS, output_path)
-        content = Path(output_path).read_text()
-        assert content.strip().startswith("<!DOCTYPE html>")
-        assert "</html>" in content
+def test_generate_report_html_is_valid_structure(report_content):
+    assert report_content.strip().startswith("<!DOCTYPE html>")
+    assert "</html>" in report_content

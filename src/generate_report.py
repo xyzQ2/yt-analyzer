@@ -1,5 +1,6 @@
 """Renders the weekly HTML report from analysis data using Jinja2."""
 
+from datetime import date
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -26,17 +27,15 @@ def _build_top_videos(videos: list[dict], analysis: dict) -> list[dict]:
 def generate_report(
     videos: list[dict],
     analysis: dict,
-    output_path: str,
+    output_path: str | Path,
     channel_handle: str = "@Chase-H-AI",
 ) -> None:
     """Render HTML report and write to output_path."""
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
     template = env.get_template("report.html")
 
-    from datetime import date
     report_date = date.today().isoformat()
 
-    # Ensure handle is displayed with @ prefix
     display_handle = f"@{channel_handle.lstrip('@')}"
 
     top_videos = _build_top_videos(videos, analysis)
