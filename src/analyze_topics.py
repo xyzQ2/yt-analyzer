@@ -7,6 +7,11 @@ from collections import defaultdict
 import anthropic
 from rake_nltk import Rake
 
+# Download required NLTK corpora if not present
+import nltk as _nltk
+for _corpus in ("stopwords", "punkt", "punkt_tab"):
+    _nltk.download(_corpus, quiet=True)
+
 # Rough token limit before chunking (chars/4 ≈ tokens; 80k tokens ≈ 320k chars)
 TOKEN_CHUNK_SIZE = 320_000
 TOP_N_VIDEOS = 50
