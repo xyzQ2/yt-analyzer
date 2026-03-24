@@ -34,7 +34,14 @@ def main() -> None:
             print("ERROR: YOUTUBE_API_KEY not set.", file=sys.stderr)
             sys.exit(1)
         print(f"Fetching videos for @{handle}...")
-        videos = fetch_channel_videos(api_key, handle)
+        try:
+            videos = fetch_channel_videos(api_key, handle)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:
+            print(f"ERROR fetching channel data: {exc}", file=sys.stderr)
+            sys.exit(1)
         print(f"Fetched {len(videos)} videos.")
 
     # Empty string triggers rake-nltk fallback inside analyze_videos()

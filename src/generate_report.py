@@ -31,7 +31,7 @@ def generate_report(
     channel_handle: str = "@Chase-H-AI",
 ) -> None:
     """Render HTML report and write to output_path."""
-    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     template = env.get_template("report.html")
 
     report_date = date.today().isoformat()
