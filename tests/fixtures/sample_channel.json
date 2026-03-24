@@ -1,0 +1,44 @@
+{
+  "videos": [
+    {
+      "id": "abc111",
+      "title": "How to Build AI Agents with LangChain in 2024",
+      "description": "Step-by-step guide to building autonomous AI agents using LangChain and Python.",
+      "view_count": 220000,
+      "published_at": "2024-03-10T09:00:00Z",
+      "transcript": "Welcome to this tutorial on building AI agents. Today we cover LangChain tools, memory, and agent loops."
+    },
+    {
+      "id": "abc222",
+      "title": "Prompt Engineering Best Practices — Full Guide",
+      "description": "Master prompt engineering with these proven techniques for GPT-4 and Claude.",
+      "view_count": 185000,
+      "published_at": "2024-02-20T14:00:00Z",
+      "transcript": "Prompt engineering is the art of crafting inputs that get the best output from large language models."
+    },
+    {
+      "id": "abc333",
+      "title": "Claude vs GPT-4: Real Benchmarks Compared",
+      "description": "I ran 50 real-world tasks through both models. Here are the results.",
+      "view_count": 310000,
+      "published_at": "2024-01-05T11:00:00Z",
+      "transcript": "Let's compare Claude and GPT-4 on coding, writing, reasoning, and creativity tasks."
+    },
+    {
+      "id": "abc444",
+      "title": "RAG Systems Explained — Build One from Scratch",
+      "description": "Retrieval-Augmented Generation from first principles, with a working demo.",
+      "view_count": 95000,
+      "published_at": "2024-04-01T10:00:00Z",
+      "transcript": "RAG combines a vector database with an LLM to answer questions from your own documents."
+    },
+    {
+      "id": "abc555",
+      "title": "Fine-Tuning vs Prompting: When to Use Each",
+      "description": "Should you fine-tune or just write better prompts? This video answers that.",
+      "view_count": 67000,
+      "published_at": "2024-05-12T08:00:00Z",
+      "transcript": "Fine-tuning and prompting both have their place. Here is how to decide which one to use."
+    }
+  ]
+}
