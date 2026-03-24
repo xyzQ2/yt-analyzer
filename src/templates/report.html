@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ channel_handle }} — YouTube Analyzer Report {{ report_date }}</title>
+  <!-- Chart.js MUST be loaded before the date adapter -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 0 auto; padding: 2rem; color: #1a1a1a; background: #f8f9fa; }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+    .meta { color: #666; font-size: 0.9rem; margin-bottom: 2rem; }
+    .warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+    .chart-full { margin-bottom: 2rem; }
+    .card { background: #fff; border-radius: 8px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    canvas { max-height: 340px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th { text-align: left; padding: 0.6rem 0.75rem; background: #f1f3f5; border-bottom: 2px solid #dee2e6; }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #e9ecef; vertical-align: top; }
+    tr:hover td { background: #f8f9fa; }
+    .badge { display: inline-block; background: #e7f5ff; color: #1971c2; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.75rem; margin: 0.1rem; }
+    .digest { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-top: 2rem; line-height: 1.7; }
+    .digest h2 { margin-top: 0; }
+    h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #333; }
+  </style>
+</head>
+<body>
+
+<h1>{{ channel_handle }} — Weekly YouTube Analysis</h1>
+<p class="meta">Report generated: {{ report_date }} &nbsp;·&nbsp; {{ total_videos }} total videos analyzed</p>
+
+{% if not ai_available %}
+<div class="warning"><strong>AI analysis unavailable</strong> — keywords extracted via RAKE algorithm from titles and descriptions. Results may be less accurate.</div>
+{% endif %}
+
+<div class="chart-grid">
+  <div class="card">
+    <h2>Top Topics by Total Views</h2>
+    <canvas id="topicsChart"></canvas>
+  </div>
+  <div class="card">
+    <h2>Top Keywords by Total Views</h2>
+    <canvas id="keywordsChart"></canvas>
+  </div>
+</div>
+
+<div class="chart-full card">
+  <h2>View Count by Publish Date <span style="font-weight:normal;color:#888;font-size:0.85rem;">(snapshot at report time)</span></h2>
+  <canvas id="scatterChart"></canvas>
+</div>
+
+<div class="card">
+  <h2>Top Videos by View Count</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Title</th>
+        <th>Views</th>
+        <th>Published</th>
+        <th>Topics</th>
+        <th>Keywords</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in top_videos %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ v.title }}</td>
+        <td>{{ "{:,}".format(v.view_count) }}</td>
+        <td>{{ v.published_at[:10] }}</td>
+        <td>{% for t in v.topics %}<span class="badge">{{ t }}</span>{% endfor %}</td>
+        <td>{% for k in v.keywords[:5] %}<span class="badge" style="background:#ebfbee;color:#2f9e44;">{{ k }}</span>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="digest">
+  <h2>Weekly Digest</h2>
+  <p>{{ digest }}</p>
+</div>
+
+<script>
+const topicsData = {{ topics_data | tojson }};
+const keywordsData = {{ keywords_data | tojson }};
+const scatterData = {{ scatter_data | tojson }};
+
+new Chart(document.getElementById('topicsChart'), {
+  type: 'bar',
+  data: {
+    labels: topicsData.map(d => d.label),
+    datasets: [{ label: 'Total Views', data: topicsData.map(d => d.value),
+      backgroundColor: 'rgba(25, 113, 194, 0.7)', borderRadius: 4 }]
+  },
+  options: { indexAxis: 'y', plugins: { legend: { display: false } },
+    scales: { x: { ticks: { callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v } } } }
+});
+
+new Chart(document.getElementById('keywordsChart'), {
+  type: 'bar',
+  data: {
+    labels: keywordsData.map(d => d.label),
+    datasets: [{ label: 'Total Views', data: keywordsData.map(d => d.value),
+      backgroundColor: 'rgba(47, 158, 68, 0.7)', borderRadius: 4 }]
+  },
+  options: { indexAxis: 'y', plugins: { legend: { display: false } },
+    scales: { x: { ticks: { callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v } } } }
+});
+
+new Chart(document.getElementById('scatterChart'), {
+  type: 'scatter',
+  data: {
+    datasets: [{ label: 'Videos', data: scatterData,
+      backgroundColor: 'rgba(230, 119, 0, 0.6)', pointRadius: 6, pointHoverRadius: 8 }]
+  },
+  options: {
+    scales: {
+      x: { type: 'time', time: { unit: 'month' }, title: { display: true, text: 'Publish Date' } },
+      y: { title: { display: true, text: 'View Count' },
+           ticks: { callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : v } }
+    },
+    plugins: { tooltip: { callbacks: { label: ctx => `${ctx.raw.title}: ${ctx.raw.y.toLocaleString()} views` } } }
+  }
+});
+</script>
+
+</body>
+</html>
