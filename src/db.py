@@ -312,3 +312,27 @@ def mark_idea_posted(conn, idea_id: int, shortcode: str) -> None:
         (shortcode, _now(), idea_id),
     )
     conn.commit()
+
+
+def get_posts_for_snapshotting(conn, days: int) -> list:
+    """Posts published within the window — these get re-measured each run."""
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    return conn.execute(
+        "SELECT * FROM posts WHERE posted_at >= ? ORDER BY posted_at DESC",
+        (cutoff,),
+    ).fetchall()
+
+
+def latest_metrics(conn, post_id: int) -> dict:
+    """Most recent snapshot for a post, or all-None if it has never been measured."""
+    row = conn.execute(
+        """
+        SELECT views, likes, comments, shares FROM post_snapshots
+        WHERE post_id = ? ORDER BY captured_at DESC LIMIT 1
+        """,
+        (post_id,),
+    ).fetchone()
+    if row is None:
+        return {"views": None, "likes": None, "comments": None, "shares": None}
+    return dict(row)
