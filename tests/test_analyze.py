@@ -77,3 +77,13 @@ def test_analyze_text_survives_api_exception(mocker):
     client.messages.create.side_effect = Exception("rate limited")
     assert analyze.analyze_text(client, {"shortcode": "A"},
                                 {"name": "D", "voice": "v"}, "claude-sonnet-5") is None
+
+
+def test_analyze_text_rejects_response_missing_humor_mechanism(mocker):
+    incomplete = {k: v for k, v in VALID.items() if k != "humor_mechanism"}
+    client = mocker.Mock()
+    client.messages.create.return_value = fake_response(json.dumps(incomplete))
+    out = analyze.analyze_text(client, {"shortcode": "A"}, {"name": "D", "voice": "v"},
+                               "claude-sonnet-5")
+    assert out is None
+    assert client.messages.create.call_count == 2

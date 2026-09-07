@@ -11,10 +11,10 @@ PROMPT_DIR = Path(__file__).parent.parent / "prompts"
 MAX_ATTEMPTS = 2
 
 TEXT_REQUIRED_KEYS = {
-    "hook", "hook_type", "payoff", "emotional_driver", "social_driver",
-    "comment_driver", "rewatch_driver", "visual_structure", "caption_role",
-    "audience", "timing", "why_it_overperformed", "reusable_pattern",
-    "scores", "ai_virality_score",
+    "hook", "hook_type", "payoff", "emotional_driver", "humor_mechanism",
+    "social_driver", "comment_driver", "rewatch_driver", "visual_structure",
+    "caption_role", "audience", "timing", "why_it_overperformed",
+    "reusable_pattern", "scores", "ai_virality_score",
 }
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
