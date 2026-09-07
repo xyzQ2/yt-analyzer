@@ -28,14 +28,14 @@ def send_email(html: str, subject: str, cfg: dict) -> bool:
         logger.info("email disabled, skipping send")
         return False
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = cfg.get("user", "")
-    msg["To"] = cfg.get("to", "")
-    msg.set_content("HTML report attached inline.")
-    msg.add_alternative(html, subtype="html")
-
     try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = cfg.get("user", "")
+        msg["To"] = cfg.get("to", "")
+        msg.set_content("HTML report attached inline.")
+        msg.add_alternative(html, subtype="html")
+
         with smtplib.SMTP(cfg["host"], int(cfg["port"]), timeout=30) as smtp:
             smtp.starttls()
             smtp.login(cfg["user"], cfg["password"])
