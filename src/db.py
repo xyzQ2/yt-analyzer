@@ -117,8 +117,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 
 def upsert_account(conn, username, platform="instagram", category=None,
-                   followers=None, relevance_score=None, active=1) -> int:
+                   followers=None, relevance_score=None, active=None) -> int:
     """Insert or update an account. Returns its id."""
+    insert_active = 1 if active is None else active
     conn.execute(
         """
         INSERT INTO accounts (username, platform, category, followers,
@@ -128,9 +129,10 @@ def upsert_account(conn, username, platform="instagram", category=None,
             category        = COALESCE(excluded.category, accounts.category),
             followers       = COALESCE(excluded.followers, accounts.followers),
             relevance_score = COALESCE(excluded.relevance_score, accounts.relevance_score),
-            active          = excluded.active
+            active          = COALESCE(?, accounts.active)
         """,
-        (username, platform, category, followers, relevance_score, active, _now()),
+        (username, platform, category, followers, relevance_score, insert_active,
+         _now(), active),
     )
     conn.commit()
     row = conn.execute(

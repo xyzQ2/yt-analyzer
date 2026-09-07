@@ -74,3 +74,29 @@ def test_get_active_accounts_excludes_inactive(conn):
     db.upsert_account(conn, "drop", active=0)
     names = [r["username"] for r in db.get_active_accounts(conn)]
     assert names == ["keep"]
+
+
+def test_upsert_account_without_active_preserves_deactivated(conn):
+    db.upsert_account(conn, "wineexample", active=0)
+    db.upsert_account(conn, "wineexample", followers=1000)
+    row = conn.execute(
+        "SELECT active FROM accounts WHERE username = ?", ("wineexample",)
+    ).fetchone()
+    assert row["active"] == 0
+
+
+def test_upsert_account_new_row_without_active_is_active(conn):
+    db.upsert_account(conn, "wineexample")
+    row = conn.execute(
+        "SELECT active FROM accounts WHERE username = ?", ("wineexample",)
+    ).fetchone()
+    assert row["active"] == 1
+
+
+def test_upsert_account_explicit_active_reactivates(conn):
+    db.upsert_account(conn, "wineexample", active=0)
+    db.upsert_account(conn, "wineexample", active=1)
+    row = conn.execute(
+        "SELECT active FROM accounts WHERE username = ?", ("wineexample",)
+    ).fetchone()
+    assert row["active"] == 1
