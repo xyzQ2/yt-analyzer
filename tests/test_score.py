@@ -1,0 +1,118 @@
+import pytest
+
+from src import score
+
+
+def test_percentile_ranks_basic():
+    assert score.percentile_ranks([10, 20, 30, 40]) == pytest.approx([0.0, 100 / 3, 200 / 3, 100.0])
+
+
+def test_percentile_ranks_none_passes_through():
+    out = score.percentile_ranks([10, None, 30])
+    assert out[1] is None, "a missing metric must not be ranked as a low value"
+    assert out[0] == 0.0 and out[2] == 100.0
+
+
+def test_percentile_ranks_all_identical_gives_fifty():
+    assert score.percentile_ranks([5, 5, 5]) == [50.0, 50.0, 50.0]
+
+
+def test_percentile_ranks_empty():
+    assert score.percentile_ranks([]) == []
+
+
+def test_post_metrics_reel():
+    m = score.post_metrics({
+        "views": 487000, "likes": 61200, "comments": 3140, "shares": None,
+        "owner_followers": 82000,
+    })
+    assert m["views_per_follower"] == pytest.approx(5.939, rel=1e-3)
+    assert m["engagement_rate"] == pytest.approx((61200 + 3140) / 487000, rel=1e-6)
+    assert m["total_engagement"] == 64340
+    assert m["raw_views"] == 487000
+    assert m["comments_per_follower"] == pytest.approx(3140 / 82000, rel=1e-6)
+
+
+def test_post_metrics_carousel_has_none_view_metrics():
+    m = score.post_metrics({
+        "views": None, "likes": 4100, "comments": 220, "shares": None,
+        "owner_followers": 82000,
+    })
+    assert m["views_per_follower"] is None
+    assert m["engagement_rate"] is None, "no views means no engagement rate"
+    assert m["raw_views"] is None
+    assert m["total_engagement"] == 4320
+    assert m["comments_per_follower"] == pytest.approx(220 / 82000, rel=1e-6)
+
+
+def test_post_metrics_zero_followers_does_not_divide_by_zero():
+    m = score.post_metrics({"views": 100, "likes": 1, "comments": 0,
+                            "shares": None, "owner_followers": 0})
+    assert m["views_per_follower"] is None
+
+
+def test_velocity_needs_two_snapshots():
+    v = score.velocity([{"captured_at": "2026-09-01T00:00:00", "views": 1000}])
+    assert v["views_per_hour"] is None
+    assert v["accelerating"] is False
+
+
+def test_velocity_and_acceleration():
+    snaps = [
+        {"captured_at": "2026-09-01T00:00:00+00:00", "views": 31000},
+        {"captured_at": "2026-09-02T00:00:00+00:00", "views": 89000},
+        {"captured_at": "2026-09-03T00:00:00+00:00", "views": 241000},
+    ]
+    v = score.velocity(snaps, threshold=1.5)
+    assert v["views_per_hour"] == pytest.approx((241000 - 89000) / 24)
+    assert v["acceleration"] == pytest.approx((241000 - 89000) / (89000 - 31000))
+    assert v["accelerating"] is True
+
+
+def test_velocity_flat_post_is_not_accelerating():
+    snaps = [
+        {"captured_at": "2026-09-01T00:00:00+00:00", "views": 1000},
+        {"captured_at": "2026-09-02T00:00:00+00:00", "views": 2000},
+        {"captured_at": "2026-09-03T00:00:00+00:00", "views": 2500},
+    ]
+    assert score.velocity(snaps)["accelerating"] is False
+
+
+WEIGHTS = {
+    "views_per_follower": 0.30, "engagement_rate": 0.25,
+    "total_engagement": 0.20, "raw_views": 0.15, "comments": 0.10,
+}
+
+
+def test_score_posts_ranks_the_overperformer_first():
+    posts = [
+        {"shortcode": "small", "views": 1000, "likes": 10, "comments": 1,
+         "shares": None, "owner_followers": 100000},
+        {"shortcode": "banger", "views": 487000, "likes": 61200, "comments": 3140,
+         "shares": None, "owner_followers": 82000},
+    ]
+    ranked = score.score_posts(posts, WEIGHTS)
+    assert ranked[0]["shortcode"] == "banger"
+    assert 0 <= ranked[0]["performance_score"] <= 100
+
+
+def test_score_posts_reweights_when_a_metric_is_missing():
+    """A carousel is scored on the metrics it has, not penalised for the rest."""
+    posts = [
+        {"shortcode": "reel", "views": 5000, "likes": 100, "comments": 10,
+         "shares": None, "owner_followers": 1000},
+        {"shortcode": "carousel", "views": None, "likes": 9000, "comments": 900,
+         "shares": None, "owner_followers": 1000},
+    ]
+    ranked = score.score_posts(posts, WEIGHTS)
+    by_code = {p["shortcode"]: p for p in ranked}
+    assert by_code["carousel"]["performance_score"] > 0
+    assert by_code["carousel"]["performance_score"] == pytest.approx(100.0)
+
+
+def test_final_score_blends_eighty_twenty():
+    assert score.final_score(90.0, 50.0, 0.20) == pytest.approx(82.0)
+
+
+def test_final_score_without_ai_uses_performance_only():
+    assert score.final_score(90.0, None, 0.20) == pytest.approx(90.0)
