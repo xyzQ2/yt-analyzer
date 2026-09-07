@@ -51,6 +51,30 @@ def test_post_metrics_zero_followers_does_not_divide_by_zero():
     assert m["views_per_follower"] is None
 
 
+def test_post_metrics_unknown_engagement_stays_none_not_zero():
+    """likes/comments unreported (None) must not fold into a measured zero —
+    that would rank an unknown post identically to a genuine zero-engagement one."""
+    m = score.post_metrics({
+        "views": 5000, "likes": None, "comments": None, "shares": None,
+        "owner_followers": 1000,
+    })
+    assert m["engagement_rate"] is None
+    assert m["total_engagement"] is None
+    assert m["comments_per_follower"] is None
+
+
+def test_post_metrics_partial_engagement_still_computes():
+    """Only likes reported, comments unknown: engagement still computes (treating
+    the unknown side as 0 for the sum), but comments_per_follower stays None."""
+    m = score.post_metrics({
+        "views": 5000, "likes": 100, "comments": None, "shares": None,
+        "owner_followers": 1000,
+    })
+    assert m["total_engagement"] == 100.0
+    assert m["engagement_rate"] == pytest.approx(100 / 5000)
+    assert m["comments_per_follower"] is None
+
+
 def test_post_metrics_zero_views_is_real_data():
     """Zero views is real data (post exists, has no engagement), not missing data."""
     m = score.post_metrics({

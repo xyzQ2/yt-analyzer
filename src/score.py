@@ -43,22 +43,28 @@ def percentile_ranks(values: list) -> list:
     return [None if v is None else (v - lo) / span * 100.0 for v in values]
 
 
+# Hazard: aggregation. `likes or 0` folds an unmeasured metric into a genuine
+# zero — an unknown count must stay None, never become a measured 0. This is
+# where that rule keeps getting broken; do not "simplify" it back to `or 0`.
 def post_metrics(post: dict) -> dict:
     """Derive the five ranking metrics for one post. Missing stays None."""
     views = post.get("views")
-    likes = post.get("likes") or 0
-    comments = post.get("comments") or 0
+    likes = post.get("likes")
+    comments = post.get("comments")
     shares = post.get("shares") or 0
     followers = post.get("owner_followers") or 0
 
-    engagement = likes + comments + shares
+    engagement = (None if (likes is None and comments is None)
+                  else (likes or 0) + (comments or 0) + shares)
 
     return {
         "views_per_follower": (views / followers) if views is not None and followers else None,
-        "engagement_rate": (engagement / views) if views else None,  # views == 0 makes this ratio undefined, not missing — None is deliberate
-        "total_engagement": float(engagement),
+        "engagement_rate": (None if engagement is None
+                            else (engagement / views) if views else None),  # views == 0 makes this ratio undefined, not missing — None is deliberate
+        "total_engagement": None if engagement is None else float(engagement),
         "raw_views": float(views) if views is not None else None,
-        "comments_per_follower": (comments / followers) if followers else None,
+        "comments_per_follower": (None if comments is None
+                                  else (comments / followers) if followers else None),
     }
 
 
