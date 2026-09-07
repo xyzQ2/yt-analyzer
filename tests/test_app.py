@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -137,3 +138,177 @@ def test_ai_limits_are_enforced(tmp_path, cfg_file, mocker, monkeypatch):
     stats = app.run_daily(config_path=cfg_file, db_path=db_path,
                           report_path=str(tmp_path / "r.html"))
     assert stats["text_analyzed"] == 40
+
+
+def _one_post(shortcode="S1", username="wineexample", owner_followers=82000):
+    return {
+        "platform": "instagram", "shortcode": shortcode, "username": username,
+        "owner_followers": owner_followers, "url": "u", "video_url": None,
+        "thumbnail_url": None, "caption": "c", "content_type": "Video",
+        "posted_at": "2026-09-06T10:00:00+00:00", "duration_sec": 10.0,
+        "views": 5000, "likes": 100, "comments": 10, "shares": None,
+    }
+
+
+def test_collect_refreshes_account_followers_from_post(tmp_path, cfg_file, mocker,
+                                                        monkeypatch):
+    """A seeded account's followers are NULL forever unless the collect loop
+    refreshes them from what Apify actually reports per post."""
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+    db_path = str(tmp_path / "test.db")
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    db.upsert_account(conn, "wineexample")  # seeded: followers left NULL
+    conn.close()
+
+    mocker.patch("app.apify.fetch_profile_posts", return_value=[_one_post()])
+    mocker.patch("app.analyze.analyze_text", return_value=None)
+    mocker.patch("app.analyze.analyze_video", return_value=None)
+    mocker.patch("app.patterns.detect_patterns", return_value=[])
+    mocker.patch("app.ideas.generate_ideas", return_value=[])
+    mocker.patch("app.Anthropic", return_value=mocker.Mock())
+
+    app.run_daily(config_path=cfg_file, db_path=db_path,
+                 report_path=str(tmp_path / "r.html"))
+
+    conn = db.connect(db_path)
+    row = conn.execute("SELECT followers FROM accounts WHERE username = ?",
+                       ("wineexample",)).fetchone()
+    conn.close()
+    assert row["followers"] == 82000
+
+
+def test_collect_warns_when_no_post_reports_followers(tmp_path, cfg_file, mocker,
+                                                       monkeypatch, caplog):
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+    db_path = str(tmp_path / "test.db")
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    db.upsert_account(conn, "wineexample")
+    conn.close()
+
+    mocker.patch("app.apify.fetch_profile_posts",
+                 return_value=[_one_post(owner_followers=None)])
+    mocker.patch("app.analyze.analyze_text", return_value=None)
+    mocker.patch("app.analyze.analyze_video", return_value=None)
+    mocker.patch("app.patterns.detect_patterns", return_value=[])
+    mocker.patch("app.ideas.generate_ideas", return_value=[])
+    mocker.patch("app.Anthropic", return_value=mocker.Mock())
+
+    with caplog.at_level(logging.WARNING, logger="app"):
+        app.run_daily(config_path=cfg_file, db_path=db_path,
+                      report_path=str(tmp_path / "r.html"))
+
+    assert any(r.levelname == "WARNING" and "owner_followers" in r.message
+              for r in caplog.records), (
+        "silent degradation is the actual defect — this must be logged, not silent"
+    )
+
+
+def test_collect_binds_real_shortcode_to_posted_idea(tmp_path, cfg_file, mocker,
+                                                      monkeypatch):
+    """Blotato's id (posted_ref) and the real Instagram shortcode are different
+    things; the feedback loop needs the latter bound onto the idea that
+    produced it."""
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+    db_path = str(tmp_path / "test.db")
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    db.upsert_account(conn, "drinktoiletwine", category="own", active=1)
+    idea_id = db.save_idea(conn, {"concept": "c", "source_pattern": "P"}, None,
+                           "LOW", 80.0)
+    db.mark_idea_posted(conn, idea_id, "blotato-ref-1")
+    conn.close()
+
+    mocker.patch("app.apify.fetch_profile_posts", return_value=[
+        _one_post(shortcode="REALCODE1", username="drinktoiletwine",
+                  owner_followers=5000)
+    ])
+    mocker.patch("app.analyze.analyze_text", return_value=None)
+    mocker.patch("app.analyze.analyze_video", return_value=None)
+    mocker.patch("app.patterns.detect_patterns", return_value=[])
+    mocker.patch("app.ideas.generate_ideas", return_value=[])
+    mocker.patch("app.Anthropic", return_value=mocker.Mock())
+
+    app.run_daily(config_path=cfg_file, db_path=db_path,
+                 report_path=str(tmp_path / "r.html"))
+
+    conn = db.connect(db_path)
+    row = db.get_idea(conn, idea_id)
+    conn.close()
+    assert row["posted_shortcode"] == "REALCODE1"
+
+
+def test_collect_never_exceeds_max_accounts(tmp_path, cfg_file, mocker, monkeypatch):
+    """max_accounts (75 in config.yaml) is the spend ceiling for collection —
+    appending our own account after slicing must never push past it."""
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+    db_path = str(tmp_path / "test.db")
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    for i in range(75):
+        db.upsert_account(conn, f"acct{i}", followers=1000, active=1)
+    conn.close()
+
+    mocker.patch("app.apify.fetch_profile_posts", return_value=[])
+    mocker.patch("app.Anthropic", return_value=mocker.Mock())
+    mocker.patch("app.ideas.generate_ideas", return_value=[])
+
+    stats = app.run_daily(config_path=cfg_file, db_path=db_path,
+                          report_path=str(tmp_path / "r.html"))
+    assert stats["accounts"] <= 75
+
+
+def test_daily_run_skips_ideas_on_zero_data_day(tmp_path, cfg_file, mocker,
+                                                monkeypatch):
+    """A zero-data day must not invent ten ideas from nothing and pollute
+    previous_ideas."""
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+    db_path = str(tmp_path / "test.db")
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    db.upsert_account(conn, "wineexample", followers=1000)
+    conn.close()
+
+    mocker.patch("app.apify.fetch_profile_posts", return_value=[])
+    mocker.patch("app.Anthropic", return_value=mocker.Mock())
+    generate = mocker.patch("app.ideas.generate_ideas", return_value=[])
+
+    app.run_daily(config_path=cfg_file, db_path=db_path,
+                 report_path=str(tmp_path / "r.html"))
+    generate.assert_not_called()
+
+
+def test_save_analysis_includes_our_performance_score(tmp_path, cfg_file, mocker,
+                                                       monkeypatch):
+    """patterns.py reads performance_score back out of the stored analysis
+    JSON; the strategist schema never produces that field, so it must be
+    merged in here or every pattern's avg_performance is fabricated."""
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+    db_path = str(tmp_path / "test.db")
+    conn = db.connect(db_path)
+    db.init_schema(conn)
+    db.upsert_account(conn, "wineexample", followers=82000)
+    conn.close()
+
+    mocker.patch("app.apify.fetch_profile_posts", return_value=[_one_post()])
+    mocker.patch("app.analyze.analyze_text", return_value=ANALYSIS)
+    mocker.patch("app.analyze.analyze_video", return_value=None)
+    mocker.patch("app.patterns.detect_patterns", return_value=[])
+    mocker.patch("app.ideas.generate_ideas", return_value=[])
+    mocker.patch("app.Anthropic", return_value=mocker.Mock())
+
+    app.run_daily(config_path=cfg_file, db_path=db_path,
+                 report_path=str(tmp_path / "r.html"))
+
+    conn = db.connect(db_path)
+    row = conn.execute("SELECT json FROM analyses WHERE tier = 'text'").fetchone()
+    conn.close()
+    payload = json.loads(row["json"])
+    assert payload.get("performance_score") is not None

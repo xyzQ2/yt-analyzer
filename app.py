@@ -34,7 +34,9 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
              "failures": 0}
 
     # 1. Collect ---------------------------------------------------------
-    accounts = db.get_active_accounts(conn)[: mon["max_accounts"]]
+    # Reserve one slot for our own account so appending it below can never push
+    # the total past max_accounts.
+    accounts = db.get_active_accounts(conn)[: mon["max_accounts"] - 1]
     # Our own account is collected and measured exactly like a competitor's.
     own_handle = cfg["brand"]["instagram"]
     own_id = db.upsert_account(conn, own_handle, category="own", active=1)
@@ -62,15 +64,20 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
             account_id = db.upsert_account(conn, username,
                                            followers=p.get("owner_followers"))
             account_id_by_username[username] = account_id
+        is_ours = username == own_handle
         post_id = db.upsert_post(conn, {
             "platform": p["platform"], "shortcode": p["shortcode"],
             "account_id": account_id, "url": p["url"], "video_url": p["video_url"],
             "thumbnail_url": p["thumbnail_url"], "caption": p["caption"],
             "content_type": p["content_type"], "posted_at": p["posted_at"],
-            "duration_sec": p["duration_sec"], "is_ours": 1 if username == own_handle else 0,
+            "duration_sec": p["duration_sec"], "is_ours": 1 if is_ours else 0,
         })
+        if is_ours:
+            db.bind_idea_shortcode(conn, p["shortcode"])
         db.add_snapshot(conn, post_id, p["views"], p["likes"], p["comments"],
                         p["shares"])
+        if p.get("owner_followers") is not None:
+            db.upsert_account(conn, username, followers=p["owner_followers"])
         enriched = dict(p)
         enriched["post_id"] = post_id
         enriched["owner_followers"] = (p.get("owner_followers")
@@ -81,6 +88,11 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
         )
         enriched.update(vel)
         posts.append(enriched)
+
+    if raw_posts and all(p.get("owner_followers") is None for p in raw_posts):
+        logger.warning("no post reported owner_followers this run — 40%s of the "
+                       "scoring weight (views_per_follower + comments_per_follower) "
+                       "is inactive", "%")
 
     # 3. Rank for free ---------------------------------------------------
     ranked = score.score_posts(posts, cfg["scoring"])
@@ -96,7 +108,11 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
             continue
         post["analysis"] = result
         post["ai_virality_score"] = result.get("ai_virality_score")
-        db.save_analysis(conn, post["post_id"], "text", result,
+        # The strategist schema has no performance_score field — it's ours, not
+        # the model's. patterns.py reads it back out of this saved JSON, so it
+        # must be merged in here or every pattern's avg_performance is fabricated.
+        payload = {**result, "performance_score": post["performance_score"]}
+        db.save_analysis(conn, post["post_id"], "text", payload,
                          result.get("ai_virality_score"),
                          cfg["models"]["text_analysis"])
         stats["text_analyzed"] += 1
@@ -136,21 +152,25 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
     # 7. Ideas -----------------------------------------------------------
     top_posts = ranked[: mon["daily_top_posts"]]
     our_results = build_our_results(conn, cfg)
-    briefs = ideas.generate_ideas(
-        client,
-        {
-            "brand": cfg["brand"],
-            "top_posts": [{k: p.get(k) for k in
-                           ("username", "caption", "final_score", "analysis")}
-                          for p in top_posts],
-            "patterns": stored_patterns,
-            "previous_ideas": [json.loads(r["brief_json"])["concept"]
-                               for r in db.get_recent_ideas(conn, 20)],
-            "our_results": our_results,
-        },
-        cfg["models"]["strategy"],
-        cfg["ideas"]["daily_count"],
-    )
+    if not ranked and not stored_patterns:
+        logger.info("no ranked posts and no patterns — skipping idea generation")
+        briefs = []
+    else:
+        briefs = ideas.generate_ideas(
+            client,
+            {
+                "brand": cfg["brand"],
+                "top_posts": [{k: p.get(k) for k in
+                               ("username", "caption", "final_score", "analysis")}
+                              for p in top_posts],
+                "patterns": stored_patterns,
+                "previous_ideas": [json.loads(r["brief_json"])["concept"]
+                                   for r in db.get_recent_ideas(conn, 20)],
+                "our_results": our_results,
+            },
+            cfg["models"]["strategy"],
+            cfg["ideas"]["daily_count"],
+        )
     idea_rows = []
     for brief in briefs:
         idea_id = db.save_idea(conn, brief, None, brief.get("similarity_risk"),
@@ -195,7 +215,8 @@ def build_our_results(conn, cfg) -> list:
 
     results = []
     for post in our_posts:
-        baseline = db.account_baseline(conn, post["account_id"], days=30)
+        baseline = db.account_baseline(conn, post["account_id"], days=30,
+                                       exclude_post_id=post["id"])
         metrics = db.latest_metrics(conn, post["id"])
         views = metrics.get("views")
 

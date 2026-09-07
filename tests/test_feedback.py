@@ -53,8 +53,23 @@ def test_build_our_results_computes_multiple_of_baseline(conn):
     cfg = {"brand": {"instagram": "drinktoiletwine"}}
     results = app.build_our_results(conn, cfg)
     hit = next(r for r in results if r["shortcode"] == "HIT")
-    assert hit["baseline_views"] == 3000.0
-    assert hit["vs_baseline"] == pytest.approx(12500 / 3000)
+    # Baseline is the median of the four OLD posts only — HIT must not count
+    # toward its own baseline. median(1000, 2000, 3000, 4000) == 2500.
+    assert hit["baseline_views"] == 2500.0
+    assert hit["vs_baseline"] == pytest.approx(12500 / 2500)
+
+
+def test_account_baseline_excludes_the_evaluated_post(conn):
+    """A post being evaluated must not count toward its own baseline."""
+    aid = db.upsert_account(conn, "drinktoiletwine")
+    for i, v in enumerate([1000, 2000, 3000]):
+        add_post(conn, aid, f"OLD{i}", v, is_ours=1)
+    eval_id = add_post(conn, aid, "EVAL", 999999, is_ours=1)
+
+    included = db.account_baseline(conn, aid)
+    excluded = db.account_baseline(conn, aid, exclude_post_id=eval_id)
+    assert excluded == 2000.0
+    assert included != excluded
 
 
 def test_build_our_results_empty_when_we_have_posted_nothing(conn):
