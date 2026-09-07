@@ -279,3 +279,36 @@ def get_patterns(conn, limit: int = 20) -> list:
         "SELECT * FROM patterns ORDER BY occurrences_7d DESC, dtw_relevance DESC LIMIT ?",
         (limit,),
     ).fetchall()
+
+
+def save_idea(conn, brief: dict, source_pattern_id, similarity_risk: str,
+              confidence) -> int:
+    import json as _json
+    cur = conn.execute(
+        """
+        INSERT INTO ideas (created_at, brief_json, source_pattern_id,
+                           similarity_risk, confidence, status)
+        VALUES (?, ?, ?, ?, ?, 'new')
+        """,
+        (_now(), _json.dumps(brief), source_pattern_id, similarity_risk, confidence),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_recent_ideas(conn, limit: int = 20) -> list:
+    return conn.execute(
+        "SELECT * FROM ideas ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+
+
+def get_idea(conn, idea_id: int):
+    return conn.execute("SELECT * FROM ideas WHERE id = ?", (idea_id,)).fetchone()
+
+
+def mark_idea_posted(conn, idea_id: int, shortcode: str) -> None:
+    conn.execute(
+        "UPDATE ideas SET status = 'posted', posted_shortcode = ?, posted_at = ? WHERE id = ?",
+        (shortcode, _now(), idea_id),
+    )
+    conn.commit()
