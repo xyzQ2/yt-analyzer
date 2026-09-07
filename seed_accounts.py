@@ -21,8 +21,11 @@ def load_seeds(path: str, db_path: str = "data/intelligence.db") -> int:
         if not line or line.startswith("#"):
             continue
         username, _, category = line.partition(",")
+        # active=None: COALESCE preserves an existing account's activation
+        # state (discover.py may have deactivated it since); new rows still
+        # default to active via upsert_account's own insert_active fallback.
         db.upsert_account(conn, username.strip().lstrip("@"),
-                          category=category.strip() or None, active=1)
+                          category=category.strip() or None, active=None)
         count += 1
     conn.close()
     logger.info("seeded %d accounts", count)
