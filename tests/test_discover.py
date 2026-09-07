@@ -74,6 +74,28 @@ def test_score_candidates_returns_empty_on_bad_response(mocker):
                                      "claude-opus-5", categories=[]) == []
 
 
+def test_score_candidates_uses_16000_max_tokens(mocker):
+    """200 hashtag candidates + up to 75 existing accounts can run to
+    thousands of output tokens; 4000 truncates and fails silently."""
+    client = mocker.Mock()
+    client.messages.create.return_value = fake_response("[]")
+    discover.score_candidates(client, [{"username": "a"}], {"name": "D", "voice": "v"},
+                              "claude-opus-5", categories=[])
+    assert client.messages.create.call_args.kwargs["max_tokens"] == 16000
+
+
+def test_score_candidates_logs_error_not_warning_on_bad_response(mocker, caplog):
+    """A truncated/bad response on a non-empty candidate list must not just be
+    a warning — that lets the weekly run silently no-op while exiting 0."""
+    client = mocker.Mock()
+    client.messages.create.return_value = fake_response("not json")
+    with caplog.at_level("WARNING", logger="discover"):
+        discover.score_candidates(client, [{"username": "a"}],
+                                  {"name": "D", "voice": "v"},
+                                  "claude-opus-5", categories=[])
+    assert any(r.levelname == "ERROR" for r in caplog.records)
+
+
 def test_run_discovery_activates_and_deactivates(db_path, mocker, monkeypatch):
     monkeypatch.setenv("APIFY_TOKEN", "t")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
@@ -103,6 +125,29 @@ def test_run_discovery_activates_and_deactivates(db_path, mocker, monkeypatch):
     assert "winememequeen" in active
     assert "corporate_wine_seminars" not in active
     conn.close()
+
+
+def test_run_discovery_caps_candidates_before_scoring(db_path, mocker, monkeypatch):
+    """200 hashtag results + up to 75 existing accounts can exceed what a single
+    call can score reliably; cap the list at a sane number before calling out."""
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+
+    conn = db.connect(db_path)
+    for i in range(60):
+        db.upsert_account(conn, f"existing{i}", active=1)
+    conn.close()
+
+    mocker.patch("discover.apify.search_hashtag_accounts", return_value=[
+        {"username": f"new{i}", "followers": 1, "sample_captions": []}
+        for i in range(150)
+    ])
+    score_candidates = mocker.patch("discover.score_candidates", return_value=[])
+    mocker.patch("discover.Anthropic", return_value=mocker.Mock())
+
+    discover.run_discovery(config_path="config.yaml", db_path=db_path)
+    passed_candidates = score_candidates.call_args[0][1]
+    assert len(passed_candidates) <= 100
 
 
 def test_run_discovery_respects_max_accounts(db_path, mocker, monkeypatch):

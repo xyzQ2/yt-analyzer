@@ -17,6 +17,8 @@ logging.basicConfig(level=logging.INFO,
                     stream=sys.stdout)
 logger = logging.getLogger("discover")
 
+MAX_CANDIDATES = 100
+
 
 def score_candidates(client, candidates: list, brand: dict, model: str,
                      categories: list) -> list:
@@ -32,7 +34,7 @@ def score_candidates(client, candidates: list, brand: dict, model: str,
     )
     try:
         resp = client.messages.create(
-            model=model, max_tokens=4000,
+            model=model, max_tokens=16000,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
@@ -49,7 +51,9 @@ def score_candidates(client, candidates: list, brand: dict, model: str,
             except json.JSONDecodeError:
                 data = None
     if not isinstance(data, list):
-        logger.warning("candidate scoring returned no usable array")
+        # candidates is non-empty here (checked above) — a silent [] would let
+        # the weekly run no-op while still exiting 0, so this is an error.
+        logger.error("candidate scoring returned no usable array")
         return []
 
     return [c for c in data
@@ -74,6 +78,7 @@ def run_discovery(config_path: str = "config.yaml",
             candidates.append({"username": username,
                                "followers": row["followers"],
                                "sample_captions": []})
+    candidates = candidates[:MAX_CANDIDATES]
 
     client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
     scored = score_candidates(client, candidates, cfg["brand"],
