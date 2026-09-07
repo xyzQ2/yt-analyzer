@@ -1,0 +1,62 @@
+import json
+from pathlib import Path
+
+from src import apify
+
+FIXTURE = Path(__file__).parent / "fixtures" / "apify_instagram.json"
+
+
+def raw_items():
+    return json.loads(FIXTURE.read_text())
+
+
+def test_normalize_reel_maps_every_field():
+    post = apify.normalize_post(raw_items()[0])
+    assert post["shortcode"] == "DAbc123"
+    assert post["username"] == "wineexample"
+    assert post["owner_followers"] == 82000
+    assert post["content_type"] == "Video"
+    assert post["video_url"] == "https://scontent.cdninstagram.com/v/reel1.mp4"
+    assert post["views"] == 487000
+    assert post["likes"] == 61200
+    assert post["comments"] == 3140
+    assert post["duration_sec"] == 14.3
+    assert post["posted_at"].startswith("2026-09-05T14:02:11")
+
+
+def test_carousel_views_stay_none_not_zero():
+    post = apify.normalize_post(raw_items()[1])
+    assert post["views"] is None, "a carousel has no view count; None is not zero"
+    assert post["shares"] is None
+    assert post["video_url"] is None
+    assert post["likes"] == 4100
+
+
+def test_item_without_shortcode_is_dropped():
+    assert apify.normalize_post(raw_items()[2]) is None
+
+
+def test_fetch_profile_posts_builds_expected_request(mocker):
+    mock_post = mocker.patch("src.apify.requests.post")
+    mock_post.return_value.status_code = 200
+    mock_post.return_value.json.return_value = raw_items()
+
+    posts = apify.fetch_profile_posts("tok", ["wineexample"], lookback_days=7,
+                                      results_limit=20)
+
+    assert len(posts) == 2, "the junk item must be dropped"
+    url, kwargs = mock_post.call_args[0][0], mock_post.call_args[1]
+    assert "apify~instagram-scraper" in url
+    assert "token" not in url, "token belongs in the header, not the query string"
+    assert kwargs["headers"]["Authorization"] == "Bearer tok"
+    body = kwargs["json"]
+    assert body["directUrls"] == ["https://www.instagram.com/wineexample/"]
+    assert body["onlyPostsNewerThan"] == "7 days"
+    assert body["resultsLimit"] == 20
+    assert body["resultsType"] == "posts"
+
+
+def test_fetch_profile_posts_returns_empty_on_http_error(mocker):
+    mock_post = mocker.patch("src.apify.requests.post")
+    mock_post.side_effect = Exception("connection reset")
+    assert apify.fetch_profile_posts("tok", ["a"], 7, 20) == []

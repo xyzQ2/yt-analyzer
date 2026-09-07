@@ -1,0 +1,35 @@
+[
+  {
+    "type": "Video",
+    "shortCode": "DAbc123",
+    "url": "https://www.instagram.com/p/DAbc123/",
+    "caption": "POV: you told the sommelier you actually like $12 wine",
+    "timestamp": "2026-09-05T14:02:11.000Z",
+    "videoUrl": "https://scontent.cdninstagram.com/v/reel1.mp4",
+    "displayUrl": "https://scontent.cdninstagram.com/v/thumb1.jpg",
+    "videoViewCount": 487000,
+    "videoPlayCount": 487000,
+    "likesCount": 61200,
+    "commentsCount": 3140,
+    "videoDuration": 14.3,
+    "ownerUsername": "wineexample",
+    "ownerFullName": "Wine Example",
+    "ownerFollowersCount": 82000
+  },
+  {
+    "type": "Sidecar",
+    "shortCode": "DXyz789",
+    "url": "https://www.instagram.com/p/DXyz789/",
+    "caption": "five wines under twelve dollars, ranked by regret",
+    "timestamp": "2026-09-04T09:30:00.000Z",
+    "displayUrl": "https://scontent.cdninstagram.com/v/thumb2.jpg",
+    "likesCount": 4100,
+    "commentsCount": 220,
+    "ownerUsername": "wineexample",
+    "ownerFollowersCount": 82000
+  },
+  {
+    "type": "Image",
+    "caption": "no shortcode, must be dropped"
+  }
+]
