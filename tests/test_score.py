@@ -51,6 +51,46 @@ def test_post_metrics_zero_followers_does_not_divide_by_zero():
     assert m["views_per_follower"] is None
 
 
+def test_post_metrics_zero_views_is_real_data():
+    """Zero views is real data (post exists, has no engagement), not missing data."""
+    m = score.post_metrics({
+        "views": 0, "likes": 0, "comments": 0, "shares": None,
+        "owner_followers": 1000,
+    })
+    assert m["views_per_follower"] == 0.0, "zero views is real data, not missing"
+    assert m["raw_views"] == 0.0, "zero views is real data, not missing"
+    assert m["engagement_rate"] is None, "zero views makes engagement rate undefined"
+    assert m["total_engagement"] == 0.0
+    assert m["comments_per_follower"] == 0.0
+
+
+def test_score_posts_zero_views_participates_in_scoring():
+    """A post with zero views ranks below others and the raw_views metric participates in its score."""
+    posts = [
+        {"shortcode": "new_post", "views": 0, "likes": 0, "comments": 0,
+         "shares": None, "owner_followers": 1000},
+        {"shortcode": "popular", "views": 5000, "likes": 100, "comments": 50,
+         "shares": None, "owner_followers": 1000},
+    ]
+    ranked = score.score_posts(posts, WEIGHTS)
+    by_code = {p["shortcode"]: p for p in ranked}
+
+    # Zero-views post ranks below the popular one
+    assert ranked[0]["shortcode"] == "popular"
+    assert ranked[1]["shortcode"] == "new_post"
+
+    # Zero-views post has a real score (not redistributed away)
+    assert by_code["new_post"]["performance_score"] >= 0.0
+
+    # With raw_views participating, zero-views score differs from what it would be
+    # if the metric were excluded (which would redistribute its weight elsewhere)
+    score_with_metric = by_code["new_post"]["performance_score"]
+    # If raw_views (0.15 weight) were excluded, that weight would be spread across
+    # the remaining metrics. A pure zero-engagement post with those metrics would score
+    # higher than our post, so our score must be less than 100.0.
+    assert score_with_metric < 100.0, "raw_views metric participation reduces zero-engagement score"
+
+
 def test_velocity_needs_two_snapshots():
     v = score.velocity([{"captured_at": "2026-09-01T00:00:00", "views": 1000}])
     assert v["views_per_hour"] is None

@@ -54,10 +54,10 @@ def post_metrics(post: dict) -> dict:
     engagement = likes + comments + shares
 
     return {
-        "views_per_follower": (views / followers) if views and followers else None,
-        "engagement_rate": (engagement / views) if views else None,
+        "views_per_follower": (views / followers) if views is not None and followers else None,
+        "engagement_rate": (engagement / views) if views else None,  # views == 0 makes this ratio undefined, not missing — None is deliberate
         "total_engagement": float(engagement),
-        "raw_views": float(views) if views else None,
+        "raw_views": float(views) if views is not None else None,
         "comments_per_follower": (comments / followers) if followers else None,
     }
 
