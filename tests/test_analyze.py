@@ -87,3 +87,58 @@ def test_analyze_text_rejects_response_missing_humor_mechanism(mocker):
                                "claude-sonnet-5")
     assert out is None
     assert client.messages.create.call_count == 2
+
+
+VALID_BLUEPRINT = {
+    "core_concept": "server rates guest wine orders",
+    "target_audience": "restaurant workers",
+    "hook_analysis": {"visual_elements": "close on wine list",
+                      "audio_elements": "'you ordered WHAT'",
+                      "psychological_trigger": "in-group recognition",
+                      "hook_formula": "Show [X] + State '[Y]' + Promise '[Z]'"},
+    "content_structure": {"opening": "cold open", "development": "three examples",
+                          "climax_payoff": "worst order", "call_to_action": "comment yours"},
+    "visual_style": {"layout": "single shot", "text_overlays": "captions bottom third",
+                     "camera_work": "handheld push-in", "ui_style": "none",
+                     "speaker_framing": "medium close", "music": "none"},
+    "recreation_framework": {"universal_elements": ["insider POV"],
+                             "customizable_elements": ["the niche"],
+                             "common_variations": ["ranked list version"]},
+}
+
+
+def test_analyze_video_downloads_and_parses(mocker):
+    mock_get = mocker.patch("src.analyze.requests.get")
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.content = b"fake mp4 bytes"
+
+    mock_client_cls = mocker.patch("src.analyze.genai.Client")
+    client = mock_client_cls.return_value
+    client.models.generate_content.return_value.text = json.dumps(VALID_BLUEPRINT)
+
+    out = analyze.analyze_video("key", "https://cdn/reel.mp4", "models/gemini-2.5-flash")
+    assert out["recreation_framework"]["universal_elements"] == ["insider POV"]
+    mock_get.assert_called_once()
+
+
+def test_analyze_video_returns_none_without_url():
+    assert analyze.analyze_video("key", None, "models/gemini-2.5-flash") is None
+
+
+def test_analyze_video_survives_download_failure(mocker):
+    mocker.patch("src.analyze.requests.get", side_effect=Exception("404"))
+    mocker.patch("src.analyze.genai.Client")
+    assert analyze.analyze_video("key", "https://cdn/x.mp4",
+                                 "models/gemini-2.5-flash") is None
+
+
+def test_analyze_video_rejects_incomplete_blueprint(mocker):
+    mock_get = mocker.patch("src.analyze.requests.get")
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.content = b"bytes"
+    mock_client_cls = mocker.patch("src.analyze.genai.Client")
+    mock_client_cls.return_value.models.generate_content.return_value.text = (
+        '{"core_concept": "only this"}'
+    )
+    assert analyze.analyze_video("key", "https://cdn/x.mp4",
+                                 "models/gemini-2.5-flash") is None

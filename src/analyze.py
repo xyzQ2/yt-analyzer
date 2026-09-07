@@ -5,6 +5,10 @@ import logging
 import re
 from pathlib import Path
 
+import requests
+from google import genai
+from google.genai import types as genai_types
+
 logger = logging.getLogger(__name__)
 
 PROMPT_DIR = Path(__file__).parent.parent / "prompts"
@@ -16,6 +20,12 @@ TEXT_REQUIRED_KEYS = {
     "caption_role", "audience", "timing", "why_it_overperformed",
     "reusable_pattern", "scores", "ai_virality_score",
 }
+
+VIDEO_REQUIRED_KEYS = {
+    "core_concept", "target_audience", "hook_analysis",
+    "content_structure", "visual_style", "recreation_framework",
+}
+VIDEO_MAX_BYTES = 20 * 1024 * 1024  # inline upload ceiling
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
@@ -75,4 +85,46 @@ def analyze_text(client, post: dict, brand: dict, model: str):
             return data
         logger.warning("bad text analysis for %s (attempt %d/%d)",
                        post.get("shortcode"), attempt, MAX_ATTEMPTS)
+    return None
+
+
+def analyze_video(api_key: str, video_url, model: str):
+    """Tier 2 recreation blueprint from the actual video. None on any failure.
+
+    Claude cannot take video input, so Gemini handles this one job.
+    """
+    if not video_url:
+        return None
+
+    try:
+        resp = requests.get(video_url, timeout=120)
+        resp.raise_for_status()
+        video_bytes = resp.content
+    except Exception as exc:
+        logger.error("video download failed for %s: %s", video_url, exc)
+        return None
+
+    if len(video_bytes) > VIDEO_MAX_BYTES:
+        logger.warning("video too large (%d bytes), skipping: %s",
+                       len(video_bytes), video_url)
+        return None
+
+    prompt = load_prompt("analyze_video")
+    try:
+        client = genai.Client(api_key=api_key)
+        result = client.models.generate_content(
+            model=model,
+            contents=[
+                genai_types.Part.from_bytes(data=video_bytes, mime_type="video/mp4"),
+                prompt,
+            ],
+        )
+        data = extract_json(result.text)
+    except Exception as exc:
+        logger.error("gemini video analysis failed for %s: %s", video_url, exc)
+        return None
+
+    if data and VIDEO_REQUIRED_KEYS <= set(data):
+        return data
+    logger.warning("incomplete blueprint for %s", video_url)
     return None
