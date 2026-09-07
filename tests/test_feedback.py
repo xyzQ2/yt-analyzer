@@ -60,3 +60,15 @@ def test_build_our_results_computes_multiple_of_baseline(conn):
 def test_build_our_results_empty_when_we_have_posted_nothing(conn):
     db.upsert_account(conn, "drinktoiletwine")
     assert app.build_our_results(conn, {"brand": {"instagram": "drinktoiletwine"}}) == []
+
+
+def test_build_our_results_measured_zero_views_is_real_data(conn):
+    aid = db.upsert_account(conn, "drinktoiletwine")
+    for i, v in enumerate([1000, 2000, 3000]):
+        add_post(conn, aid, f"OLD{i}", v, is_ours=1)
+    add_post(conn, aid, "FLOP", 0, is_ours=1)
+    cfg = {"brand": {"instagram": "drinktoiletwine"}}
+    results = app.build_our_results(conn, cfg)
+    flop = next(r for r in results if r["shortcode"] == "FLOP")
+    assert flop["views"] == 0, "measured zero views is real data, not missing"
+    assert flop["vs_baseline"] == 0.0, "zero views vs baseline is 0.0, not None"

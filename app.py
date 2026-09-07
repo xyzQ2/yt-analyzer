@@ -212,7 +212,8 @@ def build_our_results(conn, cfg) -> list:
             "caption": post["caption"],
             "views": views,
             "baseline_views": baseline,
-            "vs_baseline": (views / baseline) if views and baseline else None,
+            # views is not None: measured zero is real data. baseline truthiness: avoid /0.
+            "vs_baseline": (views / baseline) if views is not None and baseline else None,
             "source_pattern": source_pattern,
         })
     return results
