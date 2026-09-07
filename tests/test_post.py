@@ -25,15 +25,19 @@ def test_publish_idea_uploads_and_posts(db_path, mocker, monkeypatch):
     conn.close()
 
     mocker.patch("post.blotato.upload_media", return_value="https://cdn/v.mp4")
-    mocker.patch("post.blotato.publish_instagram",
-                 return_value={"id": "p1", "shortcode": "NEWCODE"})
+    # Real Blotato responses only ever carry an id — see tests/test_blotato.py.
+    mocker.patch("post.blotato.publish_instagram", return_value={"id": "p1"})
 
     assert post.publish_idea(idea_id, db_path=db_path) is True
 
     conn = db.connect(db_path)
     row = db.get_idea(conn, idea_id)
     assert row["status"] == "posted"
-    assert row["posted_shortcode"] == "NEWCODE"
+    assert row["posted_ref"] == "p1"
+    assert row["posted_shortcode"] is None, (
+        "the real Instagram shortcode isn't known until Apify collects the post "
+        "later — see bind_idea_shortcode"
+    )
     conn.close()
 
 
@@ -147,6 +151,39 @@ def test_publish_idea_refuses_repost_without_credit_handle(db_path, mocker, monk
     upload = mocker.patch("post.blotato.upload_media")
     assert post.publish_idea(idea_id, db_path=db_path) is False
     upload.assert_not_called()
+
+
+def test_publish_idea_refuses_when_max_per_day_reached(db_path, mocker, monkeypatch):
+    """config.yaml's posting.max_per_day: 1 must actually be enforced."""
+    monkeypatch.setenv("BLOTATO_API_KEY", "k")
+    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    conn = db.connect(db_path)
+    already_posted_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
+    db.mark_idea_posted(conn, already_posted_id, "p0")
+    second_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
+    conn.close()
+
+    upload = mocker.patch("post.blotato.upload_media")
+    assert post.publish_idea(second_id, db_path=db_path) is False
+    upload.assert_not_called()
+
+
+def test_publish_idea_media_url_override_supplies_missing_media_url(
+        db_path, mocker, monkeypatch):
+    monkeypatch.setenv("BLOTATO_API_KEY", "k")
+    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    conn = db.connect(db_path)
+    idea_id = db.save_idea(conn, {**BRIEF, "media_url": None}, None, "LOW", 90.0)
+    conn.close()
+
+    upload = mocker.patch("post.blotato.upload_media", return_value="https://cdn/v.mp4")
+    mocker.patch("post.blotato.publish_instagram", return_value={"id": "p1"})
+
+    assert post.publish_idea(
+        idea_id, db_path=db_path,
+        media_url_override="https://mine/override.mp4",
+    ) is True
+    upload.assert_called_once_with("k", "https://mine/override.mp4")
 
 
 def test_publish_idea_refuses_repost_with_empty_credit_handle(db_path, mocker, monkeypatch):

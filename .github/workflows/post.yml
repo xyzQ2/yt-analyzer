@@ -7,9 +7,17 @@ on:
         description: 'Idea id from the daily report'
         required: true
         type: string
+      media_url:
+        description: 'Optional: finished video URL, if not already in the idea brief'
+        required: false
+        type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: igtt-db
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -25,7 +33,9 @@ jobs:
         env:
           BLOTATO_API_KEY: ${{ secrets.BLOTATO_API_KEY }}
           BLOTATO_INSTAGRAM_ACCOUNT_ID: ${{ secrets.BLOTATO_INSTAGRAM_ACCOUNT_ID }}
-        run: python post.py "${{ inputs.idea_id }}"
+          IDEA_ID: ${{ inputs.idea_id }}
+          MEDIA_URL: ${{ inputs.media_url }}
+        run: python post.py "$IDEA_ID" --media-url "$MEDIA_URL"
       - name: Commit updated database
         uses: stefanzweifel/git-auto-commit-action@8621497c8c39c72f3e2a999a26b4ca1b5058a842  # v5.0.1
         with:

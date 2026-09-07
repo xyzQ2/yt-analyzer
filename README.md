@@ -40,8 +40,10 @@ You edit two files and nothing else:
 - `config.yaml` — accounts, limits, scoring weights, models
 - `.env` — API keys
 
-To publish, open `reports/latest.html`, pick an idea, add the finished video's URL
-to that idea's brief, then run the **Publish approved idea** workflow with its id.
+To publish, open `reports/latest.html`, pick an idea, then run the **Publish
+approved idea** workflow with its `idea_id` and the finished video's URL as the
+`media_url` input (skip `media_url` only if you already hand-edited it into the
+idea's brief). Locally this is `python post.py <idea_id> --media-url <url>`.
 
 ## Scheduling
 
