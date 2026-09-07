@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from google import genai
@@ -26,6 +27,7 @@ VIDEO_REQUIRED_KEYS = {
     "content_structure", "visual_style", "recreation_framework",
 }
 VIDEO_MAX_BYTES = 20 * 1024 * 1024  # inline upload ceiling
+ALLOWED_VIDEO_HOSTS = ("cdninstagram.com", "fbcdn.net")
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
@@ -94,6 +96,15 @@ def analyze_video(api_key: str, video_url, model: str):
     Claude cannot take video input, so Gemini handles this one job.
     """
     if not video_url:
+        return None
+
+    parsed = urlparse(video_url)
+    host = parsed.hostname or ""
+    if parsed.scheme != "https" or not any(
+        host == h or host.endswith("." + h) for h in ALLOWED_VIDEO_HOSTS
+    ):
+        logger.error("refusing to fetch video_url with untrusted scheme/host: %s",
+                     video_url)
         return None
 
     try:

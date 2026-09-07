@@ -11,6 +11,12 @@ ACTOR_URL = ("https://api.apify.com/v2/acts/apify~instagram-scraper/"
 TIMEOUT = 600
 
 
+def _https_or_none(url):
+    """Only an https URL is safe to land in an <a href> in the report. Anything
+    else (javascript:, missing scheme, ...) becomes None."""
+    return url if isinstance(url, str) and url.lower().startswith("https://") else None
+
+
 def normalize_post(raw: dict) -> dict | None:
     """Map one Apify dataset item to the project's post shape.
 
@@ -31,8 +37,8 @@ def normalize_post(raw: dict) -> dict | None:
         "shortcode": shortcode,
         "username": raw.get("ownerUsername"),
         "owner_followers": raw.get("ownerFollowersCount"),
-        "url": raw.get("url"),
-        "video_url": raw.get("videoUrl"),
+        "url": _https_or_none(raw.get("url")),
+        "video_url": _https_or_none(raw.get("videoUrl")),
         "thumbnail_url": raw.get("displayUrl"),
         "caption": raw.get("caption"),
         "content_type": raw.get("type"),

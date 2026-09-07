@@ -116,7 +116,7 @@ def test_analyze_video_downloads_and_parses(mocker):
     client = mock_client_cls.return_value
     client.models.generate_content.return_value.text = json.dumps(VALID_BLUEPRINT)
 
-    out = analyze.analyze_video("key", "https://cdn/reel.mp4", "models/gemini-2.5-flash")
+    out = analyze.analyze_video("key", "https://scontent.cdninstagram.com/reel.mp4", "models/gemini-2.5-flash")
     assert out["recreation_framework"]["universal_elements"] == ["insider POV"]
     mock_get.assert_called_once()
 
@@ -128,8 +128,24 @@ def test_analyze_video_returns_none_without_url():
 def test_analyze_video_survives_download_failure(mocker):
     mocker.patch("src.analyze.requests.get", side_effect=Exception("404"))
     mocker.patch("src.analyze.genai.Client")
-    assert analyze.analyze_video("key", "https://cdn/x.mp4",
+    assert analyze.analyze_video("key", "https://scontent.cdninstagram.com/x.mp4",
                                  "models/gemini-2.5-flash") is None
+
+
+def test_analyze_video_refuses_untrusted_host(mocker):
+    """A video_url pointing anywhere but Instagram's CDN must never be fetched —
+    it could target an internal address on the Actions runner."""
+    mock_get = mocker.patch("src.analyze.requests.get")
+    assert analyze.analyze_video("key", "https://evil.example.com/x.mp4",
+                                 "models/gemini-2.5-flash") is None
+    mock_get.assert_not_called()
+
+
+def test_analyze_video_refuses_non_https_scheme(mocker):
+    mock_get = mocker.patch("src.analyze.requests.get")
+    assert analyze.analyze_video("key", "http://scontent.cdninstagram.com/x.mp4",
+                                 "models/gemini-2.5-flash") is None
+    mock_get.assert_not_called()
 
 
 def test_analyze_video_rejects_incomplete_blueprint(mocker):
@@ -140,5 +156,5 @@ def test_analyze_video_rejects_incomplete_blueprint(mocker):
     mock_client_cls.return_value.models.generate_content.return_value.text = (
         '{"core_concept": "only this"}'
     )
-    assert analyze.analyze_video("key", "https://cdn/x.mp4",
+    assert analyze.analyze_video("key", "https://scontent.cdninstagram.com/x.mp4",
                                  "models/gemini-2.5-flash") is None

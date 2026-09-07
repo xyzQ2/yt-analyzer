@@ -84,6 +84,17 @@ def test_videoviewcount_fallback_when_playcount_absent():
     assert post["views"] == 12345
 
 
+def test_normalize_post_rejects_non_https_url_and_video_url():
+    """A javascript: URL must never land in an <a href> in the report."""
+    raw = {
+        "shortCode": "BAD1", "type": "Video",
+        "url": "javascript:alert(1)", "videoUrl": "javascript:alert(2)",
+    }
+    post = apify.normalize_post(raw)
+    assert post["url"] is None
+    assert post["video_url"] is None
+
+
 def test_fetch_profile_posts_returns_empty_on_malformed_response(mocker):
     """Regression: malformed response body (e.g. error dict) must not raise."""
     mock_post = mocker.patch("src.apify.requests.post")
