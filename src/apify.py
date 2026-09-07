@@ -73,3 +73,46 @@ def fetch_profile_posts(token: str, usernames: list[str], lookback_days: int,
     except Exception as exc:
         logger.error("apify fetch failed for %d accounts: %s", len(usernames), exc)
         return []
+
+
+HASHTAG_LIMIT_PER_TAG = 50
+
+
+def search_hashtag_accounts(token: str, hashtags: list, limit: int) -> list:
+    """Find distinct accounts posting under the given hashtags. [] on failure."""
+    if not hashtags:
+        return []
+
+    body = {
+        "search": hashtags[0] if len(hashtags) == 1 else " ".join(hashtags),
+        "searchType": "hashtag",
+        "searchLimit": len(hashtags),
+        "resultsType": "posts",
+        "resultsLimit": limit,
+        "addParentData": False,
+    }
+    try:
+        resp = requests.post(ACTOR_URL, headers={"Authorization": f"Bearer {token}"},
+                             json=body, timeout=TIMEOUT)
+        resp.raise_for_status()
+        items = resp.json()
+    except Exception as exc:
+        logger.error("apify hashtag search failed: %s", exc)
+        return []
+
+    by_username: dict = {}
+    for item in items:
+        username = item.get("ownerUsername")
+        if not username:
+            continue
+        entry = by_username.setdefault(username, {
+            "username": username,
+            "followers": item.get("ownerFollowersCount"),
+            "sample_captions": [],
+        })
+        caption = item.get("caption")
+        if caption and len(entry["sample_captions"]) < 5:
+            entry["sample_captions"].append(caption)
+
+    logger.info("hashtag search found %d distinct accounts", len(by_username))
+    return list(by_username.values())
