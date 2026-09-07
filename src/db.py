@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS ideas (
     confidence        REAL,
     status            TEXT NOT NULL DEFAULT 'new',
     posted_shortcode  TEXT,
+    posted_ref        TEXT,
     posted_at         TEXT
 );
 
@@ -306,12 +307,46 @@ def get_idea(conn, idea_id: int):
     return conn.execute("SELECT * FROM ideas WHERE id = ?", (idea_id,)).fetchone()
 
 
-def mark_idea_posted(conn, idea_id: int, shortcode: str) -> None:
+def mark_idea_posted(conn, idea_id: int, posted_ref: str) -> None:
+    """Mark an idea published. posted_ref is Blotato's submission id — not the
+    Instagram shortcode, which isn't known until Apify collects the post later.
+    posted_shortcode stays NULL here; see bind_idea_shortcode.
+    """
     conn.execute(
-        "UPDATE ideas SET status = 'posted', posted_shortcode = ?, posted_at = ? WHERE id = ?",
-        (shortcode, _now(), idea_id),
+        "UPDATE ideas SET status = 'posted', posted_ref = ?, posted_at = ? WHERE id = ?",
+        (posted_ref, _now(), idea_id),
     )
     conn.commit()
+
+
+def bind_idea_shortcode(conn, shortcode: str) -> None:
+    """Attach a newly-collected Instagram shortcode to the oldest posted idea
+    still waiting for one. No-op if there is no unbound idea, or if this
+    shortcode is already bound to some idea (keeps re-runs idempotent)."""
+    conn.execute(
+        """
+        UPDATE ideas SET posted_shortcode = ?
+        WHERE id = (
+            SELECT id FROM ideas WHERE status = 'posted' AND posted_shortcode IS NULL
+            ORDER BY posted_at ASC LIMIT 1
+        )
+        AND NOT EXISTS (SELECT 1 FROM ideas WHERE posted_shortcode = ?)
+        """,
+        (shortcode, shortcode),
+    )
+    conn.commit()
+
+
+def posts_today(conn) -> int:
+    """Count ideas published since midnight UTC today."""
+    start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).isoformat()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM ideas WHERE status = 'posted' AND posted_at >= ?",
+        (start,),
+    ).fetchone()
+    return row["n"]
 
 
 def latest_metrics(conn, post_id: int) -> dict:
@@ -338,11 +373,12 @@ def get_our_posts(conn, days: int = 30) -> list:
     ).fetchall()
 
 
-def account_baseline(conn, account_id: int, days: int = 30):
+def account_baseline(conn, account_id: int, days: int = 30, exclude_post_id=None):
     """Median views for an account's recent posts. None below three measured posts.
 
     Median rather than mean: one viral post would otherwise raise the bar so far
-    that every normal post looks like a failure.
+    that every normal post looks like a failure. exclude_post_id keeps the post
+    being evaluated out of its own baseline.
     """
     from datetime import timedelta
     from statistics import median
@@ -353,9 +389,10 @@ def account_baseline(conn, account_id: int, days: int = 30):
         FROM posts p
         JOIN post_snapshots s ON s.post_id = p.id
         WHERE p.account_id = ? AND p.posted_at >= ? AND s.views IS NOT NULL
+          AND (? IS NULL OR p.id != ?)
         GROUP BY p.id
         """,
-        (account_id, cutoff),
+        (account_id, cutoff, exclude_post_id, exclude_post_id),
     ).fetchall()
     values = [r["views"] for r in rows if r["views"] is not None]
     if len(values) < 3:

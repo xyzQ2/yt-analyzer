@@ -85,10 +85,13 @@ def test_save_and_get_idea_roundtrip(conn):
 
 def test_mark_idea_posted(conn):
     idea_id = db.save_idea(conn, brief("x"), None, "LOW", 80.0)
-    db.mark_idea_posted(conn, idea_id, "SHORT1")
+    db.mark_idea_posted(conn, idea_id, "BLOTATOREF1")
     row = db.get_idea(conn, idea_id)
     assert row["status"] == "posted"
-    assert row["posted_shortcode"] == "SHORT1"
+    assert row["posted_ref"] == "BLOTATOREF1"
+    assert row["posted_shortcode"] is None, (
+        "the real Instagram shortcode isn't known yet — see bind_idea_shortcode"
+    )
 
 
 def test_get_recent_ideas_newest_first(conn):
