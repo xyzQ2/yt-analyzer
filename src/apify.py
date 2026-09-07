@@ -22,7 +22,9 @@ def normalize_post(raw: dict) -> dict | None:
         logger.debug("dropping item with no shortCode")
         return None
 
-    views = raw.get("videoPlayCount") or raw.get("videoViewCount")
+    play_count = raw.get("videoPlayCount")
+    view_count = raw.get("videoViewCount")
+    views = play_count if play_count is not None else view_count
 
     return {
         "platform": "instagram",
@@ -65,10 +67,9 @@ def fetch_profile_posts(token: str, usernames: list[str], lookback_days: int,
         )
         resp.raise_for_status()
         items = resp.json()
+        posts = [p for p in (normalize_post(i) for i in items) if p]
+        logger.info("apify returned %d items, %d usable posts", len(items), len(posts))
+        return posts
     except Exception as exc:
         logger.error("apify fetch failed for %d accounts: %s", len(usernames), exc)
         return []
-
-    posts = [p for p in (normalize_post(i) for i in items) if p]
-    logger.info("apify returned %d items, %d usable posts", len(items), len(posts))
-    return posts

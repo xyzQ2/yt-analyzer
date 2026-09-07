@@ -60,3 +60,33 @@ def test_fetch_profile_posts_returns_empty_on_http_error(mocker):
     mock_post = mocker.patch("src.apify.requests.post")
     mock_post.side_effect = Exception("connection reset")
     assert apify.fetch_profile_posts("tok", ["a"], 7, 20) == []
+
+
+def test_videoplaycount_zero_not_treated_as_absent():
+    """Regression: views=0 on brand-new reels must not fall through to viewCount."""
+    raw = {
+        "shortCode": "NEW001",
+        "videoPlayCount": 0,
+        "type": "Video",
+    }
+    post = apify.normalize_post(raw)
+    assert post["views"] == 0, "zero views must stay zero, not become None"
+
+
+def test_videoviewcount_fallback_when_playcount_absent():
+    """Test fallback precedence: if playCount is absent, use viewCount."""
+    raw = {
+        "shortCode": "OLD001",
+        "videoViewCount": 12345,
+        "type": "Video",
+    }
+    post = apify.normalize_post(raw)
+    assert post["views"] == 12345
+
+
+def test_fetch_profile_posts_returns_empty_on_malformed_response(mocker):
+    """Regression: malformed response body (e.g. error dict) must not raise."""
+    mock_post = mocker.patch("src.apify.requests.post")
+    mock_post.return_value.status_code = 200
+    mock_post.return_value.json.return_value = {"error": "rate limited"}
+    assert apify.fetch_profile_posts("tok", ["a"], 7, 20) == []
