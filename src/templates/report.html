@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ brand.name }} Intelligence — {{ report_date }}</title>
+<style>
+  body { font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         max-width: 820px; margin: 0 auto; padding: 24px; color: #1a1a1a; }
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  h2 { margin-top: 36px; border-bottom: 2px solid #eee; padding-bottom: 6px; }
+  .stats { color: #666; font-size: 14px; }
+  .card { border: 1px solid #e4e4e4; border-radius: 8px; padding: 14px 16px;
+          margin: 12px 0; }
+  .hot { border-color: #c0392b; background: #fdf6f5; }
+  .metrics { color: #555; font-size: 13px; }
+  .pattern { display: flex; justify-content: space-between; }
+  .rising::after { content: " ↑"; color: #27ae60; }
+  .falling::after { content: " ↓"; color: #c0392b; }
+  .risk-LOW { color: #27ae60; } .risk-MEDIUM { color: #d68910; }
+  pre { white-space: pre-wrap; background: #fafafa; padding: 10px; border-radius: 6px; }
+  a { color: #1a5fb4; }
+</style>
+</head>
+<body>
+
+<h1>🍷 {{ brand.name }} Intelligence — {{ report_date }}</h1>
+<p class="stats">
+  Accounts monitored: {{ stats.accounts }} ·
+  New posts collected: {{ stats.posts }} ·
+  Text-analyzed: {{ stats.text_analyzed }} ·
+  Video-analyzed: {{ stats.video_analyzed }}
+</p>
+
+{% if fastest_rising %}
+<h2>🚀 Fastest-rising post</h2>
+<div class="card hot">
+  <strong>@{{ fastest_rising.username }}</strong>
+  <a href="{{ fastest_rising.url }}">view</a>
+  <p class="metrics">
+    Views: {{ "{:,}".format(fastest_rising.views or 0) }} ·
+    Followers: {{ "{:,}".format(fastest_rising.owner_followers or 0) }} ·
+    Views/follower: {{ "%.1f"|format(fastest_rising.views_per_follower or 0) }}× ·
+    Score: {{ "%.0f"|format(fastest_rising.final_score or 0) }}
+    {% if fastest_rising.accelerating %} · <strong>accelerating</strong>{% endif %}
+  </p>
+  {% if fastest_rising.analysis %}
+    <p><strong>Why it's working</strong></p>
+    <ul>{% for r in fastest_rising.analysis.why_it_overperformed %}<li>{{ r }}</li>{% endfor %}</ul>
+    <p><strong>Reusable formula:</strong> {{ fastest_rising.analysis.reusable_pattern }}</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<h2>🏆 Top {{ top_posts|length }}</h2>
+{% for p in top_posts %}
+<div class="card">
+  <strong>{{ loop.index }}. @{{ p.username }}</strong>
+  <a href="{{ p.url }}">view</a>
+  {% if p.accelerating %} · <strong>accelerating</strong>{% endif %}
+  <p class="metrics">
+    Score {{ "%.0f"|format(p.final_score or 0) }} ·
+    {{ "{:,}".format(p.views or 0) }} views ·
+    {{ "{:,}".format(p.likes or 0) }} likes ·
+    {{ "{:,}".format(p.comments or 0) }} comments
+  </p>
+  <p>{{ p.caption }}</p>
+  {% if p.analysis %}
+    <p class="metrics"><strong>Hook:</strong> {{ p.analysis.hook }}<br>
+    <strong>Pattern:</strong> {{ p.analysis.reusable_pattern }}</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+<h2>📈 Emerging patterns</h2>
+{% for pat in patterns %}
+<div class="card">
+  <div class="pattern">
+    <strong class="{{ pat.trend_direction }}">{{ pat.pattern }}</strong>
+    <span class="metrics">{{ pat.occurrences_7d }} this week / {{ pat.occurrences_30d }} in 30d</span>
+  </div>
+  <p class="metrics">DTW relevance: {{ pat.dtw_relevance }}</p>
+</div>
+{% endfor %}
+
+{% if our_results %}
+<h2>📊 How ours did</h2>
+{% for r in our_results %}
+<div class="card">
+  <strong>{{ r.shortcode }}</strong>
+  <p class="metrics">
+    {{ "{:,}".format(r.views or 0) }} views vs {{ "{:,}".format(r.baseline_views or 0) }} baseline
+    ({{ "%.1f"|format(r.vs_baseline or 0) }}× )
+  </p>
+</div>
+{% endfor %}
+{% endif %}
+
+<h2>💡 Make these next</h2>
+{% for i in ideas %}
+<div class="card">
+  <strong>#{{ i.id }} — {{ i.concept }}</strong>
+  <span class="risk-{{ i.similarity_risk }}">[{{ i.similarity_risk }} similarity]</span>
+  <p class="metrics">
+    {{ i.format }} · {{ i.difficulty }} · confidence {{ i.confidence }}
+  </p>
+  <p><strong>Hook:</strong> {{ i.hook }}</p>
+  <pre>{{ i.script }}</pre>
+  <p><strong>Shots:</strong> {% for s in i.shot_list %}{{ s }}{% if not loop.last %} → {% endif %}{% endfor %}</p>
+  <p><strong>Caption:</strong> {{ i.caption }}</p>
+  <p><strong>CTA:</strong> {{ i.cta }}</p>
+  <p><a href="{{ repo_url }}/actions/workflows/post.yml">Publish this — run the workflow with idea_id {{ i.id }}</a></p>
+</div>
+{% endfor %}
+
+</body>
+</html>
