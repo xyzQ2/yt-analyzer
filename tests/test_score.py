@@ -91,6 +91,32 @@ def test_score_posts_zero_views_participates_in_scoring():
     assert score_with_metric < 100.0, "raw_views metric participation reduces zero-engagement score"
 
 
+def test_score_posts_carries_derived_metrics():
+    """A scored post exposes the per-post metrics it was ranked on, not just performance_score."""
+    posts = [
+        {"shortcode": "banger", "views": 487000, "likes": 61200, "comments": 3140,
+         "shares": None, "owner_followers": 82000},
+    ]
+    ranked = score.score_posts(posts, WEIGHTS)
+    p = ranked[0]
+    for key in ("views_per_follower", "engagement_rate", "total_engagement",
+                "raw_views", "comments_per_follower"):
+        assert key in p
+    assert p["views_per_follower"] == pytest.approx(487000 / 82000)
+
+
+def test_score_posts_none_metrics_survive_the_merge():
+    """A carousel's missing view metrics stay None on the scored post, never 0."""
+    posts = [
+        {"shortcode": "carousel", "views": None, "likes": 4100, "comments": 220,
+         "shares": None, "owner_followers": 82000},
+    ]
+    ranked = score.score_posts(posts, WEIGHTS)
+    p = ranked[0]
+    assert p["views_per_follower"] is None
+    assert p["raw_views"] is None
+
+
 def test_velocity_needs_two_snapshots():
     v = score.velocity([{"captured_at": "2026-09-01T00:00:00", "views": 1000}])
     assert v["views_per_hour"] is None

@@ -121,6 +121,7 @@ def score_posts(posts: list, weights: dict) -> list:
             total += w * pct
             weight_used += w
         out = dict(post)
+        out.update(metrics[i])
         out["performance_score"] = (total / weight_used) if weight_used else 0.0
         scored.append(out)
 
