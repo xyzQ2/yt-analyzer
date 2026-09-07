@@ -68,6 +68,24 @@ def test_render_report_includes_idea_id_for_dispatch(tmp_path):
     assert "actions/workflows/post.yml" in html
 
 
+def test_render_report_shows_em_dash_for_unmeasured_our_results(tmp_path):
+    """None views/baseline is unmeasured, not a genuine zero — showing '0
+    views' makes a real post look like a total flop."""
+    ctx = dict(CONTEXT)
+    ctx["our_results"] = [
+        {"shortcode": "UNMEASURED", "views": None, "baseline_views": None,
+         "vs_baseline": None},
+    ]
+    out = tmp_path / "latest.html"
+    report.render_report(ctx, str(out))
+    html = out.read_text()
+    section = html[html.find("UNMEASURED"):]
+    assert "— views" in section
+    assert "— baseline" in section
+    assert "0 views" not in section
+    assert "0 baseline" not in section
+
+
 def test_send_email_returns_false_when_disabled():
     assert report.send_email("<p>hi</p>", "subject", {"enabled": False}) is False
 

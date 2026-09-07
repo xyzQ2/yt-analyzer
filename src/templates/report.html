@@ -88,7 +88,8 @@
 <div class="card">
   <strong>{{ r.shortcode }}</strong>
   <p class="metrics">
-    {{ "{:,}".format(r.views or 0) }} views vs {{ "{:,}".format(r.baseline_views or 0) }} baseline
+    {{ "{:,}".format(r.views) if r.views is not none else "—" }} views vs
+    {{ "{:,}".format(r.baseline_views) if r.baseline_views is not none else "—" }} baseline
     ({{ "%.1f"|format(r.vs_baseline or 0) }}× )
   </p>
 </div>
