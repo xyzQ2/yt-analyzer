@@ -1,0 +1,33 @@
+name: Publish approved idea
+
+on:
+  workflow_dispatch:
+    inputs:
+      idea_id:
+        description: 'Idea id from the daily report'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Publish
+        env:
+          BLOTATO_API_KEY: ${{ secrets.BLOTATO_API_KEY }}
+          BLOTATO_INSTAGRAM_ACCOUNT_ID: ${{ secrets.BLOTATO_INSTAGRAM_ACCOUNT_ID }}
+        run: python post.py "${{ inputs.idea_id }}"
+      - name: Commit updated database
+        uses: stefanzweifel/git-auto-commit-action@8621497c8c39c72f3e2a999a26b4ca1b5058a842  # v5.0.1
+        with:
+          commit_message: "chore: published idea ${{ inputs.idea_id }}"
+          file_pattern: data/intelligence.db

@@ -365,3 +365,15 @@ def account_baseline(conn, account_id: int, days: int = 30):
 
 def get_account(conn, account_id: int):
     return conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+
+
+def repost_permission(conn, shortcode: str):
+    """Permission row for a repost, or None if there isn't one."""
+    return conn.execute(
+        """
+        SELECT rc.* FROM repost_candidates rc
+        JOIN posts p ON p.id = rc.post_id
+        WHERE p.shortcode = ?
+        """,
+        (shortcode,),
+    ).fetchone()
