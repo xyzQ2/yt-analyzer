@@ -1,0 +1,18 @@
+# username, category
+# Replace these placeholders with real handles before the first run.
+# ~15 wine, 10 meme, 10 restaurant/hospitality, 10 alcohol brand, 10 lifestyle/food.
+
+# --- wine ---
+# examplewineaccount, wine
+
+# --- wine memes ---
+# examplewinememes, wine memes
+
+# --- hospitality / restaurants ---
+# exampleserverlife, hospitality
+
+# --- alcohol brands ---
+# examplebrand, alcohol
+
+# --- lifestyle / food ---
+# examplefoodie, food
