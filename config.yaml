@@ -1,0 +1,58 @@
+brand:
+  name: Drink Toilet Wine
+  instagram: drinktoiletwine
+  voice: >
+    Irreverent wine humour for people who drink cheap wine without apology.
+    Service-industry insider energy. Never precious, never educational-lecture.
+
+monitoring:
+  max_accounts: 75
+  posts_lookback_days: 7
+  results_per_account: 20
+  candidate_posts_for_text_ai: 40
+  candidate_posts_for_video_ai: 15
+  daily_top_posts: 25
+
+categories:
+  - wine
+  - wine memes
+  - alcohol
+  - hospitality
+  - restaurants
+  - lifestyle
+  - food
+  - comedy
+
+scoring:
+  views_per_follower: 0.30
+  engagement_rate: 0.25
+  total_engagement: 0.20
+  raw_views: 0.15
+  comments: 0.10
+  ai_weight: 0.20
+  acceleration_threshold: 1.5
+
+discovery:
+  activate_above: 70
+  deactivate_below: 50
+  hashtags:
+    - winememes
+    - serverlife
+    - restaurantlife
+    - winetok
+    - bartenderlife
+
+ideas:
+  daily_count: 10
+
+posting:
+  auto: false
+  max_per_day: 1
+
+models:
+  text_analysis: claude-sonnet-5
+  strategy: claude-opus-5
+  video: models/gemini-2.5-flash
+
+email:
+  enabled: false
