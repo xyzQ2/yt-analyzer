@@ -202,3 +202,80 @@ def get_snapshots(conn, post_id: int) -> list:
         "SELECT * FROM post_snapshots WHERE post_id = ? ORDER BY captured_at ASC",
         (post_id,),
     ).fetchall()
+
+
+def save_analysis(conn, post_id: int, tier: str, payload: dict,
+                  ai_virality_score, model: str) -> int:
+    """Store one AI analysis. One row per (post, tier); re-running replaces it."""
+    import json as _json
+    conn.execute(
+        """
+        INSERT INTO analyses (post_id, tier, json, ai_virality_score, model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(post_id, tier) DO UPDATE SET
+            json = excluded.json,
+            ai_virality_score = excluded.ai_virality_score,
+            model = excluded.model,
+            created_at = excluded.created_at
+        """,
+        (post_id, tier, _json.dumps(payload), ai_virality_score, model, _now()),
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id FROM analyses WHERE post_id = ? AND tier = ?", (post_id, tier)
+    ).fetchone()
+    return row["id"]
+
+
+def get_analyses_since(conn, days: int) -> list:
+    """Analyses for posts published within the last N days."""
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    return conn.execute(
+        """
+        SELECT a.*, p.shortcode, p.posted_at, p.url, p.caption
+        FROM analyses a
+        JOIN posts p ON p.id = a.post_id
+        WHERE p.posted_at >= ?
+        ORDER BY p.posted_at DESC
+        """,
+        (cutoff,),
+    ).fetchall()
+
+
+def save_pattern(conn, pattern: dict) -> int:
+    """Upsert a pattern keyed on its name."""
+    conn.execute(
+        """
+        INSERT INTO patterns (pattern, description, first_seen, last_seen,
+                              occurrences_7d, occurrences_30d, occurrences_90d,
+                              avg_performance, trend_direction, dtw_relevance)
+        VALUES (:pattern, :description, :now, :now, :occurrences_7d,
+                :occurrences_30d, :occurrences_90d, :avg_performance,
+                :trend_direction, :dtw_relevance)
+        ON CONFLICT(pattern) DO UPDATE SET
+            description     = excluded.description,
+            last_seen       = excluded.last_seen,
+            occurrences_7d  = excluded.occurrences_7d,
+            occurrences_30d = excluded.occurrences_30d,
+            occurrences_90d = excluded.occurrences_90d,
+            avg_performance = excluded.avg_performance,
+            trend_direction = excluded.trend_direction,
+            dtw_relevance   = excluded.dtw_relevance
+        """,
+        {**{"description": None, "occurrences_7d": 0, "occurrences_30d": 0,
+            "occurrences_90d": 0, "avg_performance": None,
+            "trend_direction": None, "dtw_relevance": None},
+         **pattern, "now": _now()},
+    )
+    conn.commit()
+    row = conn.execute("SELECT id FROM patterns WHERE pattern = ?",
+                       (pattern["pattern"],)).fetchone()
+    return row["id"]
+
+
+def get_patterns(conn, limit: int = 20) -> list:
+    return conn.execute(
+        "SELECT * FROM patterns ORDER BY occurrences_7d DESC, dtw_relevance DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
