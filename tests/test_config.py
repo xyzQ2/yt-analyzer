@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from src.config import load_config
@@ -17,3 +19,13 @@ def test_load_config_reads_yaml(tmp_path):
 def test_load_config_missing_file_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_config(str(tmp_path / "nope.yaml"))
+
+
+def test_config_documents_that_posting_auto_is_unused():
+    """posting.auto is deliberately dead — a future reader must not 'fix' it
+    without a comment explaining why nothing reads it."""
+    text = Path("config.yaml").read_text()
+    auto_line = next(i for i, line in enumerate(text.splitlines())
+                     if line.strip().startswith("auto:"))
+    preceding = "\n".join(text.splitlines()[max(0, auto_line - 4):auto_line])
+    assert "unused" in preceding or "intentionally" in preceding

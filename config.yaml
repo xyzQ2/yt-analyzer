@@ -46,6 +46,10 @@ ideas:
   daily_count: 10
 
 posting:
+  # auto is intentionally unused — nothing in the code reads this flag.
+  # Unattended posting was deferred; the absence of code enforcing it is a
+  # stronger guarantee than a flag check. Do not "fix" this by wiring it up
+  # without a deliberate design decision to allow unattended posting.
   auto: false
   max_per_day: 1
 
