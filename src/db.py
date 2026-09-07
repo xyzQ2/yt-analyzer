@@ -314,16 +314,6 @@ def mark_idea_posted(conn, idea_id: int, shortcode: str) -> None:
     conn.commit()
 
 
-def get_posts_for_snapshotting(conn, days: int) -> list:
-    """Posts published within the window — these get re-measured each run."""
-    from datetime import timedelta
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    return conn.execute(
-        "SELECT * FROM posts WHERE posted_at >= ? ORDER BY posted_at DESC",
-        (cutoff,),
-    ).fetchall()
-
-
 def latest_metrics(conn, post_id: int) -> dict:
     """Most recent snapshot for a post, or all-None if it has never been measured."""
     row = conn.execute(
@@ -336,3 +326,42 @@ def latest_metrics(conn, post_id: int) -> dict:
     if row is None:
         return {"views": None, "likes": None, "comments": None, "shares": None}
     return dict(row)
+
+
+def get_our_posts(conn, days: int = 30) -> list:
+    """Our own published posts within the window."""
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    return conn.execute(
+        "SELECT * FROM posts WHERE is_ours = 1 AND posted_at >= ? ORDER BY posted_at DESC",
+        (cutoff,),
+    ).fetchall()
+
+
+def account_baseline(conn, account_id: int, days: int = 30):
+    """Median views for an account's recent posts. None below three measured posts.
+
+    Median rather than mean: one viral post would otherwise raise the bar so far
+    that every normal post looks like a failure.
+    """
+    from datetime import timedelta
+    from statistics import median
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    rows = conn.execute(
+        """
+        SELECT MAX(s.views) AS views
+        FROM posts p
+        JOIN post_snapshots s ON s.post_id = p.id
+        WHERE p.account_id = ? AND p.posted_at >= ? AND s.views IS NOT NULL
+        GROUP BY p.id
+        """,
+        (account_id, cutoff),
+    ).fetchall()
+    values = [r["views"] for r in rows if r["views"] is not None]
+    if len(values) < 3:
+        return None
+    return float(median(values))
+
+
+def get_account(conn, account_id: int):
+    return conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()

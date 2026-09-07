@@ -35,6 +35,11 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
 
     # 1. Collect ---------------------------------------------------------
     accounts = db.get_active_accounts(conn)[: mon["max_accounts"]]
+    # Our own account is collected and measured exactly like a competitor's.
+    own_handle = cfg["brand"]["instagram"]
+    own_id = db.upsert_account(conn, own_handle, category="own", active=1)
+    if own_handle not in [a["username"] for a in accounts]:
+        accounts = list(accounts) + [db.get_account(conn, own_id)]
     stats["accounts"] = len(accounts)
     account_id_by_username = {a["username"]: a["id"] for a in accounts}
     followers_by_username = {a["username"]: a["followers"] for a in accounts}
@@ -62,7 +67,7 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
             "account_id": account_id, "url": p["url"], "video_url": p["video_url"],
             "thumbnail_url": p["thumbnail_url"], "caption": p["caption"],
             "content_type": p["content_type"], "posted_at": p["posted_at"],
-            "duration_sec": p["duration_sec"], "is_ours": 0,
+            "duration_sec": p["duration_sec"], "is_ours": 1 if username == own_handle else 0,
         })
         db.add_snapshot(conn, post_id, p["views"], p["likes"], p["comments"],
                         p["shares"])
@@ -181,8 +186,36 @@ def run_daily(config_path: str = "config.yaml", db_path: str | None = None,
 
 
 def build_our_results(conn, cfg) -> list:
-    """Placeholder until Task 10 fills it in."""
-    return []
+    """How our own recent posts performed against our own 30-day baseline."""
+    import json as _json
+
+    our_posts = db.get_our_posts(conn, days=30)
+    if not our_posts:
+        return []
+
+    results = []
+    for post in our_posts:
+        baseline = db.account_baseline(conn, post["account_id"], days=30)
+        metrics = db.latest_metrics(conn, post["id"])
+        views = metrics.get("views")
+
+        source_pattern = None
+        idea = conn.execute(
+            "SELECT brief_json FROM ideas WHERE posted_shortcode = ?",
+            (post["shortcode"],),
+        ).fetchone()
+        if idea:
+            source_pattern = _json.loads(idea["brief_json"]).get("source_pattern")
+
+        results.append({
+            "shortcode": post["shortcode"],
+            "caption": post["caption"],
+            "views": views,
+            "baseline_views": baseline,
+            "vs_baseline": (views / baseline) if views and baseline else None,
+            "source_pattern": source_pattern,
+        })
+    return results
 
 
 def main() -> None:
