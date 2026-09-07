@@ -105,3 +105,65 @@ def test_publish_idea_allows_permitted_repost(db_path, mocker, monkeypatch):
     mocker.patch("post.blotato.upload_media", return_value="https://cdn/v.mp4")
     mocker.patch("post.blotato.publish_instagram", return_value={"shortcode": "NEW"})
     assert post.publish_idea(idea_id, db_path=db_path) is True
+
+
+def test_publish_idea_refuses_missing_media_url(db_path, mocker, monkeypatch):
+    monkeypatch.setenv("BLOTATO_API_KEY", "k")
+    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    conn = db.connect(db_path)
+    idea_id = db.save_idea(conn, {**BRIEF, "media_url": None}, None, "LOW", 90.0)
+    conn.close()
+    upload = mocker.patch("post.blotato.upload_media")
+    assert post.publish_idea(idea_id, db_path=db_path) is False
+    upload.assert_not_called()
+
+
+def test_publish_idea_refuses_missing_credentials(db_path, mocker, monkeypatch):
+    monkeypatch.delenv("BLOTATO_API_KEY", raising=False)
+    monkeypatch.delenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", raising=False)
+    conn = db.connect(db_path)
+    idea_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
+    conn.close()
+    upload = mocker.patch("post.blotato.upload_media")
+    assert post.publish_idea(idea_id, db_path=db_path) is False
+    upload.assert_not_called()
+
+
+def test_publish_idea_refuses_repost_without_credit_handle(db_path, mocker, monkeypatch):
+    monkeypatch.setenv("BLOTATO_API_KEY", "k")
+    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    conn = db.connect(db_path)
+    account_id = db.upsert_account(conn, "wineexample")
+    post_id = db.upsert_post(conn, {"shortcode": "THEIRS", "account_id": account_id,
+                                    "posted_at": "2026-09-05T10:00:00+00:00"})
+    # permission_granted=1 but credit_handle is NULL
+    conn.execute(
+        "INSERT INTO repost_candidates (post_id, permission_granted, credit_handle) "
+        "VALUES (?, 1, NULL)", (post_id,))
+    conn.commit()
+    idea_id = db.save_idea(conn, {**BRIEF, "repost_of_shortcode": "THEIRS"},
+                           None, "LOW", 90.0)
+    conn.close()
+    upload = mocker.patch("post.blotato.upload_media")
+    assert post.publish_idea(idea_id, db_path=db_path) is False
+    upload.assert_not_called()
+
+
+def test_publish_idea_refuses_repost_with_empty_credit_handle(db_path, mocker, monkeypatch):
+    monkeypatch.setenv("BLOTATO_API_KEY", "k")
+    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    conn = db.connect(db_path)
+    account_id = db.upsert_account(conn, "wineexample")
+    post_id = db.upsert_post(conn, {"shortcode": "THEIRS", "account_id": account_id,
+                                    "posted_at": "2026-09-05T10:00:00+00:00"})
+    # permission_granted=1 but credit_handle is empty string
+    conn.execute(
+        "INSERT INTO repost_candidates (post_id, permission_granted, credit_handle) "
+        "VALUES (?, 1, '')", (post_id,))
+    conn.commit()
+    idea_id = db.save_idea(conn, {**BRIEF, "repost_of_shortcode": "THEIRS"},
+                           None, "LOW", 90.0)
+    conn.close()
+    upload = mocker.patch("post.blotato.upload_media")
+    assert post.publish_idea(idea_id, db_path=db_path) is False
+    upload.assert_not_called()
