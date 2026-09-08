@@ -71,13 +71,18 @@ def run_discovery(config_path: str = "config.yaml",
     max_accounts = cfg["monitoring"]["max_accounts"]
 
     existing = {r["username"]: r for r in db.get_active_accounts(conn)}
-    candidates = apify.search_hashtag_accounts(
+    hashtag_candidates = apify.search_hashtag_accounts(
         os.environ.get("APIFY_TOKEN", ""), disc["hashtags"], limit=200)
-    for username, row in existing.items():
-        if username not in [c["username"] for c in candidates]:
-            candidates.append({"username": username,
-                               "followers": row["followers"],
-                               "sample_captions": []})
+
+    # Build candidate list: existing accounts first (must survive cap), then new ones
+    candidates = [{"username": username,
+                   "followers": row["followers"],
+                   "sample_captions": []}
+                  for username, row in existing.items()]
+    for cand in hashtag_candidates:
+        if cand["username"] not in existing:
+            candidates.append(cand)
+
     candidates = candidates[:MAX_CANDIDATES]
 
     client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))

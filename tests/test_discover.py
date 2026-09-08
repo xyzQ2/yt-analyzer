@@ -173,3 +173,35 @@ def test_run_discovery_respects_max_accounts(db_path, mocker, monkeypatch):
     conn = db.connect(db_path)
     assert len(db.get_active_accounts(conn)) == 75
     conn.close()
+
+
+def test_run_discovery_preserves_existing_accounts_before_cap(db_path, mocker, monkeypatch):
+    """Existing active accounts must survive the MAX_CANDIDATES cap so they can
+    be re-evaluated. Cap should never slice away all existing accounts."""
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "t")
+
+    conn = db.connect(db_path)
+    for i in range(3):
+        db.upsert_account(conn, f"existing{i}", active=1)
+    conn.close()
+
+    mocker.patch("discover.apify.search_hashtag_accounts",
+                 return_value=[{"username": f"new{i}", "followers": 1,
+                                "sample_captions": []} for i in range(120)])
+    score_candidates = mocker.patch("discover.score_candidates", return_value=[])
+    mocker.patch("discover.Anthropic", return_value=mocker.Mock())
+
+    discover.run_discovery(config_path="config.yaml", db_path=db_path)
+
+    # Inspect what score_candidates was called with
+    passed_candidates = score_candidates.call_args[0][1]
+
+    # All 3 existing accounts must be in the list
+    passed_usernames = [c["username"] for c in passed_candidates]
+    assert "existing0" in passed_usernames
+    assert "existing1" in passed_usernames
+    assert "existing2" in passed_usernames
+
+    # List must be capped at MAX_CANDIDATES (100)
+    assert len(passed_candidates) <= 100
