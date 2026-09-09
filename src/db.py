@@ -308,7 +308,7 @@ def get_idea(conn, idea_id: int):
 
 
 def mark_idea_posted(conn, idea_id: int, posted_ref: str) -> None:
-    """Mark an idea published. posted_ref is Blotato's submission id — not the
+    """Mark an idea published. posted_ref is the media_publish id — not the
     Instagram shortcode, which isn't known until Apify collects the post later.
     posted_shortcode stays NULL here; see bind_idea_shortcode.
     """

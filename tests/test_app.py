@@ -209,7 +209,7 @@ def test_collect_warns_when_no_post_reports_followers(tmp_path, cfg_file, mocker
 
 def test_collect_binds_real_shortcode_to_posted_idea(tmp_path, cfg_file, mocker,
                                                       monkeypatch):
-    """Blotato's id (posted_ref) and the real Instagram shortcode are different
+    """media_publish's id (posted_ref) and the real Instagram shortcode are different
     things; the feedback loop needs the latter bound onto the idea that
     produced it."""
     monkeypatch.setenv("APIFY_TOKEN", "t")
@@ -220,7 +220,7 @@ def test_collect_binds_real_shortcode_to_posted_idea(tmp_path, cfg_file, mocker,
     db.upsert_account(conn, "drinktoiletwine", category="own", active=1)
     idea_id = db.save_idea(conn, {"concept": "c", "source_pattern": "P"}, None,
                            "LOW", 80.0)
-    db.mark_idea_posted(conn, idea_id, "blotato-ref-1")
+    db.mark_idea_posted(conn, idea_id, "ig-media-id-1")
     conn.close()
 
     mocker.patch("app.apify.fetch_profile_posts", return_value=[

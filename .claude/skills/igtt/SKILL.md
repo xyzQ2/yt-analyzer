@@ -24,7 +24,7 @@ Claude scores 0-100       → sqlite: posts + snapshots
                           → reports/latest.html + email
                                ↓ operator picks one
                                             GH Actions dispatch
-                                            → Blotato → mark posted
+                                            → IG Graph API → mark posted
                                             → track our own metrics
 ```
 
@@ -86,7 +86,7 @@ mandatory. Reaching for `|safe`, `Markup`, or `autoescape=False` is a stop-and-a
 | `src/analyze.py` | Claude text tier + Gemini video tier |
 | `src/patterns.py`, `src/ideas.py` | clustering and brief generation |
 | `src/report.py` | jinja2 render + optional SMTP |
-| `src/blotato.py` | media upload + publish |
+| `src/instagram.py` | Instagram Graph API container + publish |
 | `prompts/*.md` | tuned without touching code |
 | `app.py` / `discover.py` / `post.py` | the three entry points |
 
@@ -100,5 +100,5 @@ python seed_accounts.py          load seeds.txt
 .venv/bin/python -m pytest tests/ -q
 ```
 
-Tests never touch the network — Apify, Anthropic, Gemini and Blotato are all mocked at
+Tests never touch the network — Apify, Anthropic, Gemini and the Graph API are all mocked at
 their boundary, and fixtures live in `tests/fixtures/`.

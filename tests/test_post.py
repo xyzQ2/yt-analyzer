@@ -17,16 +17,16 @@ def db_path(tmp_path):
     return p
 
 
-def test_publish_idea_uploads_and_posts(db_path, mocker, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+def test_publish_idea_creates_container_and_posts(db_path, mocker, monkeypatch):
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     idea_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
     conn.close()
 
-    mocker.patch("post.blotato.upload_media", return_value="https://cdn/v.mp4")
-    # Real Blotato responses only ever carry an id — see tests/test_blotato.py.
-    mocker.patch("post.blotato.publish_instagram", return_value={"id": "p1"})
+    mocker.patch("post.instagram.create_container", return_value="c1")
+    # media_publish only ever returns an id — see tests/test_instagram.py.
+    mocker.patch("post.instagram.publish_container", return_value={"id": "p1"})
 
     assert post.publish_idea(idea_id, db_path=db_path) is True
 
@@ -46,7 +46,7 @@ def test_publish_idea_refuses_unknown_id(db_path):
 
 
 def test_publish_idea_refuses_already_posted(db_path, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
     conn = db.connect(db_path)
     idea_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
     db.mark_idea_posted(conn, idea_id, "ALREADY")
@@ -55,7 +55,7 @@ def test_publish_idea_refuses_already_posted(db_path, monkeypatch):
 
 
 def test_publish_idea_refuses_high_similarity_risk(db_path, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
     conn = db.connect(db_path)
     idea_id = db.save_idea(conn, {**BRIEF, "similarity_risk": "HIGH"}, None,
                            "HIGH", 90.0)
@@ -63,21 +63,21 @@ def test_publish_idea_refuses_high_similarity_risk(db_path, monkeypatch):
     assert post.publish_idea(idea_id, db_path=db_path) is False
 
 
-def test_publish_idea_stops_when_upload_fails(db_path, mocker, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+def test_publish_idea_stops_when_container_fails(db_path, mocker, monkeypatch):
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     idea_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
     conn.close()
-    mocker.patch("post.blotato.upload_media", return_value=None)
-    publish = mocker.patch("post.blotato.publish_instagram")
+    mocker.patch("post.instagram.create_container", return_value=None)
+    publish = mocker.patch("post.instagram.publish_container")
     assert post.publish_idea(idea_id, db_path=db_path) is False
     publish.assert_not_called()
 
 
 def test_publish_idea_refuses_unpermitted_repost(db_path, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     account_id = db.upsert_account(conn, "wineexample")
     post_id = db.upsert_post(conn, {"shortcode": "THEIRS", "account_id": account_id,
@@ -93,8 +93,8 @@ def test_publish_idea_refuses_unpermitted_repost(db_path, monkeypatch):
 
 
 def test_publish_idea_allows_permitted_repost(db_path, mocker, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     account_id = db.upsert_account(conn, "wineexample")
     post_id = db.upsert_post(conn, {"shortcode": "THEIRS", "account_id": account_id,
@@ -106,36 +106,36 @@ def test_publish_idea_allows_permitted_repost(db_path, mocker, monkeypatch):
     idea_id = db.save_idea(conn, {**BRIEF, "repost_of_shortcode": "THEIRS"},
                            None, "LOW", 90.0)
     conn.close()
-    mocker.patch("post.blotato.upload_media", return_value="https://cdn/v.mp4")
-    mocker.patch("post.blotato.publish_instagram", return_value={"shortcode": "NEW"})
+    mocker.patch("post.instagram.create_container", return_value="c1")
+    mocker.patch("post.instagram.publish_container", return_value={"shortcode": "NEW"})
     assert post.publish_idea(idea_id, db_path=db_path) is True
 
 
 def test_publish_idea_refuses_missing_media_url(db_path, mocker, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     idea_id = db.save_idea(conn, {**BRIEF, "media_url": None}, None, "LOW", 90.0)
     conn.close()
-    upload = mocker.patch("post.blotato.upload_media")
+    create = mocker.patch("post.instagram.create_container")
     assert post.publish_idea(idea_id, db_path=db_path) is False
-    upload.assert_not_called()
+    create.assert_not_called()
 
 
 def test_publish_idea_refuses_missing_credentials(db_path, mocker, monkeypatch):
-    monkeypatch.delenv("BLOTATO_API_KEY", raising=False)
-    monkeypatch.delenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("IG_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("IG_USER_ID", raising=False)
     conn = db.connect(db_path)
     idea_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
     conn.close()
-    upload = mocker.patch("post.blotato.upload_media")
+    create = mocker.patch("post.instagram.create_container")
     assert post.publish_idea(idea_id, db_path=db_path) is False
-    upload.assert_not_called()
+    create.assert_not_called()
 
 
 def test_publish_idea_refuses_repost_without_credit_handle(db_path, mocker, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     account_id = db.upsert_account(conn, "wineexample")
     post_id = db.upsert_post(conn, {"shortcode": "THEIRS", "account_id": account_id,
@@ -148,47 +148,48 @@ def test_publish_idea_refuses_repost_without_credit_handle(db_path, mocker, monk
     idea_id = db.save_idea(conn, {**BRIEF, "repost_of_shortcode": "THEIRS"},
                            None, "LOW", 90.0)
     conn.close()
-    upload = mocker.patch("post.blotato.upload_media")
+    create = mocker.patch("post.instagram.create_container")
     assert post.publish_idea(idea_id, db_path=db_path) is False
-    upload.assert_not_called()
+    create.assert_not_called()
 
 
 def test_publish_idea_refuses_when_max_per_day_reached(db_path, mocker, monkeypatch):
     """config.yaml's posting.max_per_day: 1 must actually be enforced."""
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     already_posted_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
     db.mark_idea_posted(conn, already_posted_id, "p0")
     second_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
     conn.close()
 
-    upload = mocker.patch("post.blotato.upload_media")
+    create = mocker.patch("post.instagram.create_container")
     assert post.publish_idea(second_id, db_path=db_path) is False
-    upload.assert_not_called()
+    create.assert_not_called()
 
 
 def test_publish_idea_media_url_override_supplies_missing_media_url(
         db_path, mocker, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     idea_id = db.save_idea(conn, {**BRIEF, "media_url": None}, None, "LOW", 90.0)
     conn.close()
 
-    upload = mocker.patch("post.blotato.upload_media", return_value="https://cdn/v.mp4")
-    mocker.patch("post.blotato.publish_instagram", return_value={"id": "p1"})
+    create = mocker.patch("post.instagram.create_container", return_value="c1")
+    mocker.patch("post.instagram.publish_container", return_value={"id": "p1"})
 
     assert post.publish_idea(
         idea_id, db_path=db_path,
         media_url_override="https://mine/override.mp4",
     ) is True
-    upload.assert_called_once_with("k", "https://mine/override.mp4")
+    create.assert_called_once_with("tok", "ig1", "https://mine/override.mp4",
+                                   "the caption")
 
 
 def test_publish_idea_refuses_repost_with_empty_credit_handle(db_path, mocker, monkeypatch):
-    monkeypatch.setenv("BLOTATO_API_KEY", "k")
-    monkeypatch.setenv("BLOTATO_INSTAGRAM_ACCOUNT_ID", "acct1")
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
     conn = db.connect(db_path)
     account_id = db.upsert_account(conn, "wineexample")
     post_id = db.upsert_post(conn, {"shortcode": "THEIRS", "account_id": account_id,
@@ -201,6 +202,6 @@ def test_publish_idea_refuses_repost_with_empty_credit_handle(db_path, mocker, m
     idea_id = db.save_idea(conn, {**BRIEF, "repost_of_shortcode": "THEIRS"},
                            None, "LOW", 90.0)
     conn.close()
-    upload = mocker.patch("post.blotato.upload_media")
+    create = mocker.patch("post.instagram.create_container")
     assert post.publish_idea(idea_id, db_path=db_path) is False
-    upload.assert_not_called()
+    create.assert_not_called()

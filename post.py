@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 
-from src import blotato, db
+from src import db, instagram
 from src.config import load_config
 
 logging.basicConfig(level=logging.INFO,
@@ -56,24 +56,24 @@ def publish_idea(idea_id: int, config_path: str = "config.yaml",
                      "brief before publishing", idea_id)
         return False
 
-    api_key = os.environ.get("BLOTATO_API_KEY", "")
-    account_id = os.environ.get("BLOTATO_INSTAGRAM_ACCOUNT_ID", "")
-    if not api_key or not account_id:
-        logger.error("BLOTATO_API_KEY and BLOTATO_INSTAGRAM_ACCOUNT_ID must be set")
+    access_token = os.environ.get("IG_ACCESS_TOKEN", "")
+    ig_user_id = os.environ.get("IG_USER_ID", "")
+    if not access_token or not ig_user_id:
+        logger.error("IG_ACCESS_TOKEN and IG_USER_ID must be set")
         return False
 
-    hosted = blotato.upload_media(api_key, media_url)
-    if not hosted:
+    container_id = instagram.create_container(access_token, ig_user_id, media_url,
+                                              brief.get("caption", ""))
+    if not container_id:
         return False
 
-    result = blotato.publish_instagram(api_key, account_id,
-                                       brief.get("caption", ""), hosted)
+    result = instagram.publish_container(access_token, ig_user_id, container_id)
     if not result:
         return False
 
     posted_ref = result.get("id") or result.get("shortcode") or "unknown"
     db.mark_idea_posted(conn, idea_id, posted_ref)
-    logger.info("published idea %s (blotato ref %s)", idea_id, posted_ref)
+    logger.info("published idea %s (instagram ref %s)", idea_id, posted_ref)
     conn.close()
     return True
 

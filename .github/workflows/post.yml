@@ -31,8 +31,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Publish
         env:
-          BLOTATO_API_KEY: ${{ secrets.BLOTATO_API_KEY }}
-          BLOTATO_INSTAGRAM_ACCOUNT_ID: ${{ secrets.BLOTATO_INSTAGRAM_ACCOUNT_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IDEA_ID: ${{ inputs.idea_id }}
           MEDIA_URL: ${{ inputs.media_url }}
         run: python post.py "$IDEA_ID" --media-url "$MEDIA_URL"

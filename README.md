@@ -52,7 +52,7 @@ Both commit `data/intelligence.db` back to the repository — that is how state 
 between runs, since Actions has no persistent disk.
 
 Required repository secrets: `APIFY_TOKEN`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
-`BLOTATO_API_KEY`, `BLOTATO_INSTAGRAM_ACCOUNT_ID`, and the `SMTP_*` set if email is
+`IG_ACCESS_TOKEN`, `IG_USER_ID`, and the `SMTP_*` set if email is
 enabled.
 
 The database schema is created on first run and has no migrations. If you upgrade from a
