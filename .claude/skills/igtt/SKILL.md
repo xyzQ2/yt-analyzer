@@ -31,6 +31,11 @@ Claude scores 0-100       → sqlite: posts + snapshots
 Two AI vendors on purpose: Claude does all text, Gemini watches video because Claude has
 no native video input. Splitting them was cheaper than frame extraction plus transcription.
 
+**Media hosting.** The Graph API has no upload endpoint — Instagram fetches the `media_url`
+itself. A `media_url` without a scheme is resolved against `posting.media_base_url`, which
+points at this repository's raw URLs; that works only because the repo is **public**. Make
+it private and publishing breaks silently. Absolute URLs pass through untouched.
+
 ## Non-negotiables
 
 **`None` never becomes `0`.** A metric the platform does not report stores `None`, and
@@ -49,9 +54,9 @@ add a ceiling, enforce it — `posting.max_per_day` sat unenforced for a whole b
 the README claimed otherwise.
 
 **Publish guardrails.** `post.py` refuses on: unknown id, already posted, HIGH
-`similarity_risk`, no `media_url`, missing credentials, daily cap reached, upload failure,
-and a repost whose `repost_candidates` row lacks `permission_granted = 1` AND a non-empty
-`credit_handle`. Every refusal precedes any network call. The repost gate is a copyright
+`similarity_risk`, no `media_url`, a `media_url` that fails a HEAD check, missing
+credentials, daily cap reached, and a repost whose `repost_candidates` row lacks
+`permission_granted = 1` AND a non-empty `credit_handle`. Every refusal precedes any network call. The repost gate is a copyright
 guardrail — a strike costs the account the system exists to grow. Each guard has a test
 that fails when the guard is removed; keep it that way.
 
@@ -89,6 +94,7 @@ mandatory. Reaching for `|safe`, `Markup`, or `autoescape=False` is a stop-and-a
 | `src/instagram.py` | Instagram Graph API container + publish |
 | `prompts/*.md` | tuned without touching code |
 | `app.py` / `discover.py` / `post.py` | the three entry points |
+| `docs/how-it-works.md` | operator guide: discovery, metrics, pattern clustering, the knobs |
 
 ## Commands
 
