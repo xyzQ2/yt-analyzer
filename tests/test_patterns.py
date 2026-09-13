@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -33,9 +34,12 @@ PATTERNS = [
 
 def test_save_and_read_analysis(conn):
     account_id = db.upsert_account(conn, "wineexample")
+    # Relative to now: get_analyses_since() measures against the real clock, so a
+    # hardcoded date silently ages out of the window.
+    recent = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     post_id = db.upsert_post(conn, {
         "shortcode": "A1", "account_id": account_id,
-        "posted_at": "2026-09-06T10:00:00+00:00",
+        "posted_at": recent,
     })
     db.save_analysis(conn, post_id, "text", {"reusable_pattern": "x"}, 89.0,
                      "claude-sonnet-5")
