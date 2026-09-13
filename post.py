@@ -5,6 +5,9 @@ import json
 import logging
 import os
 import sys
+import urllib.parse
+
+import requests
 
 from src import db, instagram
 from src.config import load_config
@@ -13,6 +16,26 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
                     stream=sys.stdout)
 logger = logging.getLogger("post")
+
+
+def resolve_media_url(media_url: str, base_url: str) -> str:
+    """Turn a bare repo path into a full URL. Absolute URLs pass through."""
+    if urllib.parse.urlparse(media_url).scheme in ("http", "https"):
+        return media_url
+    return urllib.parse.urljoin(base_url, media_url.lstrip("/"))
+
+
+def media_is_reachable(media_url: str) -> bool:
+    """HEAD the URL. Anything but a 2xx means Instagram will not get the file."""
+    try:
+        resp = requests.head(media_url, allow_redirects=True, timeout=30)
+    except Exception as exc:
+        logger.error("could not reach %s: %s", media_url, exc)
+        return False
+    if not resp.ok:
+        logger.error("%s returned HTTP %s", media_url, resp.status_code)
+        return False
+    return True
 
 
 def publish_idea(idea_id: int, config_path: str = "config.yaml",
@@ -54,6 +77,14 @@ def publish_idea(idea_id: int, config_path: str = "config.yaml",
     if not media_url:
         logger.error("idea %s has no media_url — add the finished video's URL to the "
                      "brief before publishing", idea_id)
+        return False
+
+    media_url = resolve_media_url(media_url, cfg["posting"]["media_base_url"])
+    if not media_is_reachable(media_url):
+        logger.error("refusing to publish idea %s: %s is not publicly reachable. "
+                     "Instagram fetches the file itself, so an unreachable URL fails "
+                     "inside the container with an opaque error — push the file first.",
+                     idea_id, media_url)
         return False
 
     access_token = os.environ.get("IG_ACCESS_TOKEN", "")

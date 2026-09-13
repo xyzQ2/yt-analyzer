@@ -40,10 +40,18 @@ You edit two files and nothing else:
 - `config.yaml` — accounts, limits, scoring weights, models
 - `.env` — API keys
 
-To publish, open `reports/latest.html`, pick an idea, then run the **Publish
-approved idea** workflow with its `idea_id` and the finished video's URL as the
-`media_url` input (skip `media_url` only if you already hand-edited it into the
-idea's brief). Locally this is `python post.py <idea_id> --media-url <url>`.
+To publish, commit the finished video to `media/` and push it, then open
+`reports/latest.html`, pick an idea, and run the **Publish approved idea**
+workflow with its `idea_id` and `media/<filename>` as the `media_url` input.
+Locally this is `python post.py <idea_id> --media-url media/<filename>`.
+
+Instagram fetches the file itself — there is no upload endpoint — so the URL has
+to be publicly reachable. A `media_url` without a scheme is resolved against
+`posting.media_base_url` in `config.yaml`, which points at this repository's raw
+URLs; that works only because the repository is public. A full `https://` URL is
+passed through untouched if you host the video elsewhere. Either way the URL is
+checked with a HEAD request before anything is sent to Instagram, because an
+unfetchable URL fails inside the media container with an opaque error.
 
 ## Scheduling
 

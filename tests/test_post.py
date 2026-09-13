@@ -4,8 +4,21 @@ import post
 from src import db
 
 
+# Captured before the autouse fixture below replaces the module attribute, so the
+# reachability check itself can still be tested.
+REAL_MEDIA_IS_REACHABLE = post.media_is_reachable
+
 BRIEF = {"concept": "c", "hook": "h", "script": "s", "caption": "the caption",
          "similarity_risk": "LOW", "media_url": "https://mine/video.mp4"}
+
+
+@pytest.fixture(autouse=True)
+def reachable_media(mocker):
+    """publish_idea HEADs the media URL; no test may make that request for real.
+
+    Tests that exercise the unreachable branch override this.
+    """
+    return mocker.patch("post.media_is_reachable", return_value=True)
 
 
 @pytest.fixture()
@@ -205,3 +218,63 @@ def test_publish_idea_refuses_repost_with_empty_credit_handle(db_path, mocker, m
     create = mocker.patch("post.instagram.create_container")
     assert post.publish_idea(idea_id, db_path=db_path) is False
     create.assert_not_called()
+
+
+def test_resolve_media_url_joins_bare_repo_path():
+    base = "https://raw.githubusercontent.com/xyzQ2/yt-analyzer/igtt-build/"
+    assert post.resolve_media_url("media/reel.mp4", base) == base + "media/reel.mp4"
+    # A leading slash must not reset the path back to the domain root.
+    assert post.resolve_media_url("/media/reel.mp4", base) == base + "media/reel.mp4"
+
+
+def test_resolve_media_url_passes_absolute_urls_through():
+    base = "https://raw.githubusercontent.com/xyzQ2/yt-analyzer/igtt-build/"
+    assert post.resolve_media_url("https://cdn/v.mp4", base) == "https://cdn/v.mp4"
+    assert post.resolve_media_url("http://cdn/v.mp4", base) == "http://cdn/v.mp4"
+
+
+def test_publish_idea_refuses_unreachable_media(db_path, mocker, monkeypatch,
+                                                reachable_media):
+    """An unreachable URL fails opaquely inside Instagram's container, so refuse first."""
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
+    conn = db.connect(db_path)
+    idea_id = db.save_idea(conn, BRIEF, None, "LOW", 90.0)
+    conn.close()
+
+    reachable_media.return_value = False
+    create = mocker.patch("post.instagram.create_container")
+
+    assert post.publish_idea(idea_id, db_path=db_path) is False
+    create.assert_not_called()
+
+
+def test_media_is_reachable_reports_status(mocker):
+    head = mocker.patch("post.requests.head")
+    head.return_value.ok = True
+    assert REAL_MEDIA_IS_REACHABLE("https://cdn/v.mp4") is True
+    assert head.call_args[1]["allow_redirects"] is True
+
+    head.return_value.ok = False
+    head.return_value.status_code = 404
+    assert REAL_MEDIA_IS_REACHABLE("https://cdn/v.mp4") is False
+
+    mocker.patch("post.requests.head", side_effect=Exception("dns"))
+    assert REAL_MEDIA_IS_REACHABLE("https://cdn/v.mp4") is False
+
+
+def test_publish_idea_resolves_bare_path_before_publishing(db_path, mocker, monkeypatch):
+    monkeypatch.setenv("IG_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("IG_USER_ID", "ig1")
+    conn = db.connect(db_path)
+    idea_id = db.save_idea(conn, {**BRIEF, "media_url": "media/reel.mp4"}, None,
+                           "LOW", 90.0)
+    conn.close()
+
+    create = mocker.patch("post.instagram.create_container", return_value="c1")
+    mocker.patch("post.instagram.publish_container", return_value={"id": "p1"})
+
+    assert post.publish_idea(idea_id, db_path=db_path) is True
+    passed_url = create.call_args[0][2]
+    assert passed_url.startswith("https://raw.githubusercontent.com/")
+    assert passed_url.endswith("/media/reel.mp4")

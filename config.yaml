@@ -52,6 +52,11 @@ posting:
   # without a deliberate design decision to allow unattended posting.
   auto: false
   max_per_day: 1
+  # A media_url without a scheme is treated as a path under this base, so a brief
+  # can just say "media/reel-0912.mp4". The repo is public, which is the only
+  # reason raw.githubusercontent.com works — Instagram fetches the file itself and
+  # never sends credentials.
+  media_base_url: https://raw.githubusercontent.com/xyzQ2/yt-analyzer/igtt-build/
 
 models:
   text_analysis: claude-sonnet-5
